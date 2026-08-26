@@ -9,7 +9,11 @@ from src.models import (
     FilterStep,
     IntentResult,
     Product,
+    ParsedTurn,
+    PolicyDecision,
     SessionState,
+    SlotKind,
+    SlotValue,
     TraceEvent,
 )
 
@@ -23,6 +27,10 @@ __all__ = [
     "FilterStep",
     "IntentResult",
     "Product",
+    "ParsedTurn",
+    "PolicyDecision",
     "SessionState",
+    "SlotKind",
+    "SlotValue",
     "TraceEvent",
 ]

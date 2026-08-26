@@ -34,7 +34,14 @@ Verify the downloaded file using the published `SHA256SUMS` file.
 
 ## Run the Starter
 
-Python 3.10 or later is recommended. The starter uses only the Python standard library.
+Python 3.10 or later is recommended. The BM25 fallback uses only the standard library; persistent dense retrieval uses the dependencies in `requirements.txt`.
+
+Create the project environment and install the dense-retrieval dependencies:
+
+```bash
+/opt/anaconda3/bin/python3.12 -m venv .venv
+.venv/bin/pip install -r requirements.txt
+```
 
 ```bash
 python3 -m evaluator.local_evaluator
@@ -46,21 +53,24 @@ The command writes per-session results and aggregate metrics to `results.json`.
 The included weak BM25 starter scores Hit Rate@10 `0.125`, MRR `0.068034`, and
 MTTC `9.81` on the released public set. See `docs/baseline_results.json`.
 
-## Stage 2 MVP
+## Stage 2 MVP and Stage 3 Hybrid State
 
 The editable Agent now uses the deterministic Stage 2 framework described in `技术文档.md`:
 
 ```text
 starter.Agent (official adapter)
   -> SessionStateStore
-  -> rule intent and constraint parsing
-  -> read-only CatalogStore and hard filters
-  -> in-memory SQLite FTS5 BM25
+  -> rule or optional DeepSeek structured parsing
+  -> typed slots, override, negation, and TTL
+  -> read-only CatalogStore, hard filters, and safe relaxation
+  -> Buying/Browsing BM25 + optional dense retrieval
+  -> weighted RRF and a wide candidate pool
+  -> clarification policy and late-turn protection
   -> Top 10 sanitization
   -> optional JSONL trace
 ```
 
-The implementation remains single-process, offline, and standard-library only. The catalog is normalized and the FTS5 index is built once when `Agent` starts. Session state is keyed by the official `session_id`; `reset` replaces all prior state for that identifier. Explicit budget, brand, color, material, category, and size constraints are applied before final ranking. Missing prices do not satisfy an explicit budget.
+The default implementation remains single-process and offline. Dense and LLM routes are disabled by default, so the Agent always has a rule + BM25 path. The catalog is normalized and the FTS5 index is built once when `Agent` starts. Session state is keyed by the official `session_id`; `reset` replaces all prior state for that identifier. Explicit budget, brand, color, material, category, size, and exclusions are applied before final ranking. Missing prices do not satisfy an explicit budget.
 
 The official entry point remains unchanged:
 
@@ -101,6 +111,89 @@ python3 -m scripts.phase2_benchmark --output .runtime/phase2-validation.json
 
 The Stage 2 validation run on the included 200 sessions completed with 0 contract failures and 0 session-leakage failures. Local metrics were Hit Rate@10 `0.14`, MRR `0.076442`, and MTTC `9.665`; the official weak-baseline record in `docs/baseline_results.json` is intentionally unchanged.
 
+Run the Stage 3 default state/clarification configuration with the same wrapper:
+
+```bash
+python3 -m scripts.phase2_benchmark --output .runtime/phase3-bm25-state-validation.json
+```
+
+The Stage 3 run completed with Hit Rate@10 `0.31`, MRR `0.212282`, MTTC `8.685`, 0 contract failures, and 0 session-leakage failures. See `docs/phase3_results.md` for scenario metrics and experiment boundaries.
+
+Run the Stage 3 ablations when comparing dialogue contributions:
+
+```bash
+python3 -m scripts.phase3_benchmark --variant full --output .runtime/phase3-full.json
+python3 -m scripts.phase3_benchmark --variant no-clarification --output .runtime/phase3-no-clarification.json
+python3 -m scripts.phase3_benchmark --variant no-relaxation --output .runtime/phase3-no-relaxation.json
+```
+
+On the released public set, `no-clarification` returned to the Stage 2 score (`0.119633`), `no-relaxation` scored `0.255585`, and the full variant scored `0.264985`. These runs use dense and LLM disabled, so they are deterministic and do not require an API key.
+
+`no-clarification` disables follow-up questions: the Agent returns its current Top 10 without asking for a missing category, budget, size, color, brand, or material. `no-relaxation` keeps clarification but disables safe empty-result recovery: if all hard filters produce no candidates, the Agent does not retry after removing brand, color/material, or expanding a category synonym. Budget and explicit exclusions are never silently relaxed in either mode.
+
+### Persistent dense retrieval
+
+Dense retrieval requires NumPy plus a locally available sentence-transformers model. The Agent never downloads a model during startup. Configure a local path explicitly:
+
+On macOS, the FAISS and PyTorch wheels may ship separate OpenMP runtimes; the dense module sets `KMP_DUPLICATE_LIB_OK=TRUE` before loading them to avoid a process abort. Dense inference remains single-process.
+
+```python
+config = AgentConfig(
+    catalog_path=Path("data/catalog.jsonl"),
+    dense_enabled=True,
+    dense_model_id="your-local-model-id",
+    dense_model_path=Path("/path/to/cached/model"),
+    dense_index_path=Path(".runtime/indexes/catalog-all-MiniLM-L6-v2.faiss"),
+)
+```
+
+The generated FAISS file contains normalized product vectors plus a JSON manifest keyed by catalog checksum, model/version, dimension, normalization, backend, and config version. It remains under `.runtime/` and must not be committed. When the default catalog and matching files exist, `Agent("data/catalog.jsonl")` loads this index directly; it does not re-embed products. If the index/model is unavailable or its manifest mismatches, the Agent records a controlled fallback and continues with BM25.
+
+Normal Agent startup has `dense_build_allowed=False`: it will never rebuild or overwrite FAISS. Only the explicit build command enables writes.
+
+Build the persistent index once with:
+
+```bash
+.venv/bin/python -m scripts.build_dense_index
+```
+
+The command embeds exactly the 50,000 records from `data/catalog.jsonl`. Use `--force` only after changing the catalog or embedding model.
+
+For routine testing, use the fixed 8-session stratified set instead of all 200 sessions:
+
+```bash
+.venv/bin/python -m scripts.phase3_benchmark \
+  --dataset data/public_smoke.jsonl \
+  --dense \
+  --output .runtime/phase3-dense-smoke.json
+```
+
+`data/public_smoke.jsonl` contains 2 sessions from each of Buying, Browsing, Intent Override, and Boundary. Regenerate it deterministically with `python -m scripts.make_smoke_dataset`.
+
+### Optional DeepSeek parser
+
+`deepseek-v4-flash` is configured as a schema-bounded parser, not as an ASIN selector or tool-running agent. Keep the API key in the environment or in local `api.env` with mode 0600:
+
+```bash
+export DEEPSEEK_API_KEY="..."
+# or: chmod 600 api.env
+```
+
+Enable it explicitly:
+
+```python
+config = AgentConfig(
+    catalog_path=Path("data/catalog.jsonl"),
+    llm_enabled=True,
+    llm_model="deepseek-v4-flash",
+    llm_endpoint="https://api.deepseek.com/chat/completions",
+    llm_timeout_ms=600,
+)
+agent = Agent(config=config)
+```
+
+Environment variables take precedence over `api.env`. Missing keys, unsafe file permissions, HTTP/auth failures, timeouts, malformed JSON, unknown fields, and missing usage all fall back to deterministic rules. Secrets and raw model responses are excluded from trace and config snapshots.
+
 ### Optional trace
 
 Tracing is disabled by default. Enable it explicitly when constructing the Agent:
@@ -123,7 +216,7 @@ Each JSONL event contains routing, constraint names, filter counts, candidate co
 
 ### Later phases
 
-Stage 2 intentionally does not include dense retrieval, RRF fusion, complete override/negation/TTL handling, progressive relaxation, reranking, Verifier, or adaptive clarification. Those remain Stage 3 and Stage 4 work so the current baseline stays deterministic and independently testable.
+Stage 3 provides dense/RRF boundaries, structured state, override/negation, safe relaxation, and basic clarification. Cross-Encoder/LLM reranking, Verifier, entropy/margin policy, and information-gain calibration remain Stage 4 work.
 
 ## Agent Interface
 
@@ -168,14 +261,19 @@ Teams may use any legally accessible LLM API or local model. Teams manage their 
 
 ```text
 data/public_set.jsonl             200 labeled development sessions
+data/public_smoke.jsonl           8-session stratified smoke set
 docs/competition_specification.md participant rules and evaluation protocol
 docs/agent_api_contract.json      machine-readable Agent contract
 docs/evaluation_config.json       scoring configuration
 docs/baseline_results.json        reproducible weak-starter reference score
 starter/agent.py                  editable weak starter
 evaluator/local_evaluator.py      public-set simulator and scorer
-src/                              Stage 2 typed Agent core
+src/                              Stage 2/3 typed Agent core
 scripts/phase2_benchmark.py       local engineering-metric wrapper
+scripts/phase3_benchmark.py       Stage 3 ablation wrapper
+scripts/build_dense_index.py      one-time 50k product FAISS builder
+scripts/make_smoke_dataset.py     stratified smoke-set generator
+docs/phase3_results.md            Phase 3 experiment record
 ```
 
 ## Judging and Submission Policy

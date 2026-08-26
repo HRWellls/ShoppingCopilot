@@ -3,7 +3,9 @@ from __future__ import annotations
 import re
 
 from src.catalog.normalize import COLORS, MATERIALS, clean_text, normalize_key
-from src.models import ConstraintSet, SessionState
+from src.models import ConstraintSet, ParsedTurn, SessionState
+from src.nlu.router import RuleIntentRouter
+from src.state.overrides import make_slot
 
 
 NUMBER = r"(?:\d+(?:\.\d+)?)"
@@ -62,6 +64,42 @@ class RuleConstraintExtractor:
             if value:
                 updates.brand = value
         return updates
+
+    def parse(self, message: str, state: SessionState, soft_ttl: int = 3) -> ParsedTurn:
+        intent = RuleIntentRouter().route(message)
+        updates = self.extract(message)
+        normalized = normalize_key(message)
+        clears: set[str] = set()
+        overrides: set[str] = set()
+        slots = {}
+        if re.search(r"\b(any brand|brand does not matter|no brand preference)\b", normalized):
+            clears.add("brand")
+            updates.brand = None
+        explicit_override = bool(re.search(r"\b(actually|instead|change|rather)\b", normalized))
+        for name, value in updates.as_dict().items():
+            if value is None:
+                continue
+            slots[name] = make_slot(value, name=name, turn=state.turn_count, soft_ttl=soft_ttl)
+            if explicit_override or name in state.slots:
+                overrides.add(name)
+        negated = re.search(
+            r"\b(?:not|no|without|don't want|do not want)\s+(black|white|blue|red|pink|green|brown|gray|grey|purple|yellow|orange)\b",
+            normalized,
+        )
+        if negated:
+            color = "gray" if negated.group(1) == "grey" else negated.group(1)
+            slots["color"] = make_slot(color, name="color", turn=state.turn_count, negated=True, soft_ttl=soft_ttl)
+            overrides.add("color")
+        return ParsedTurn(
+            intent=intent.label,
+            intent_confidence=intent.confidence,
+            slot_updates=slots,
+            clears=frozenset(clears),
+            overrides=frozenset(overrides),
+            query_text=clean_text(message),
+            evidence=intent.evidence,
+            parser_source="rule",
+        )
 
 
 def merge_constraints(current: ConstraintSet, updates: ConstraintSet) -> ConstraintSet:

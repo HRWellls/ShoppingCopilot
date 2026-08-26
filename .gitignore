@@ -17,5 +17,8 @@ tests/test_5core_builder.py
 tests/test_organizer_pipeline.py
 *.log
 .runtime/
+.venv/
 openspec/
 .codex/
+api.env
+.venv/

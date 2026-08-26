@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import unittest
+import importlib.util
 from pathlib import Path
 
 from starter.agent import Agent
@@ -16,6 +17,10 @@ class FullCatalogSmokeTest(unittest.TestCase):
         self.assertEqual(agent._core.catalog.record_count, 50_000)
         self.assertEqual(len(agent._core.catalog.checksum), 64)
         self.assertEqual(agent._core.index.build_count, 1)
+        if importlib.util.find_spec("faiss") and agent.config.dense_index_path.exists():
+            self.assertIsNotNone(agent._core.dense)
+            self.assertTrue(agent._core.dense.loaded_from_disk)
+            self.assertEqual(agent._core.dense.index.ntotal, 50_000)
 
         agent.reset("full-smoke", {"summary": "", "preference_tags": []})
         first = agent.respond("full-smoke", "running shoes", 1, 10)

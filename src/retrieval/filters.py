@@ -27,7 +27,9 @@ class HardFilter:
         ] = OrderedDict()
 
     def apply(self, constraints: ConstraintSet) -> tuple[frozenset[str], FilterReport]:
-        cache_key = tuple(constraints.as_dict().values())
+        cache_key = tuple(constraints.as_dict().values()) + tuple(
+            (name, tuple(sorted(values))) for name, values in sorted(constraints.exclusions.items())
+        )
         cached = self._cache.get(cache_key)
         if cached is not None:
             self._cache.move_to_end(cache_key)
@@ -62,6 +64,14 @@ class HardFilter:
         if constraints.size:
             size = normalize_key(constraints.size)
             apply_step("size", lambda product: size in product.attributes["size"])
+        for name, values in sorted(constraints.exclusions.items()):
+            if name not in {"brand", "color", "material", "category", "size"} or not values:
+                continue
+            normalized = frozenset(normalize_key(value) for value in values)
+            apply_step(
+                f"exclude_{name}",
+                lambda product, field=name, blocked=normalized: not bool(product.attributes.get(field, frozenset()) & blocked),
+            )
 
         report = FilterReport(
             initial_count=self._catalog.record_count,

@@ -64,3 +64,14 @@ def profile(tag: str = "comfort") -> dict:
         "preference_tags": [tag],
         "summary": f"Prefers {tag}.",
     }
+
+
+PHASE3_TURNS = {
+    "buying": "black running shoes under $100 size 9",
+    "browsing": "what should I wear to a summer wedding",
+    "override": ("black shoes", "actually white instead"),
+    "clear": ("shoes from SwiftStep", "any brand is fine"),
+    "negation": ("red shoes", "not red"),
+    "empty": "purple leather boots under $5",
+    "clarify": "recommend something",
+}

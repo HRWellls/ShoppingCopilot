@@ -4,7 +4,7 @@ from collections.abc import Iterable
 from typing import Any
 
 from src.catalog.store import CatalogStore
-from src.models import Candidate
+from src.models import Candidate, ModelUsage
 
 
 def candidate_id(value: Any) -> str:
@@ -34,10 +34,16 @@ def sanitize_candidates(
     return result
 
 
-def make_response(message: str, parent_asins: Iterable[str]) -> dict[str, Any]:
+def make_response(
+    message: str,
+    parent_asins: Iterable[str],
+    ask_attribute: str | None = None,
+    usage: ModelUsage | None = None,
+) -> dict[str, Any]:
+    usage = usage or ModelUsage()
     return {
         "message": message,
-        "ask_attribute": None,
+        "ask_attribute": ask_attribute,
         "recommendations": [{"parent_asin": parent_asin} for parent_asin in parent_asins],
-        "usage": {"prompt_tokens": 0, "completion_tokens": 0},
+        "usage": {"prompt_tokens": usage.prompt_tokens, "completion_tokens": usage.completion_tokens},
     }

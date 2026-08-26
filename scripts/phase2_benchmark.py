@@ -10,6 +10,10 @@ from typing import Any
 from evaluator.local_evaluator import catalog_index, evaluate, load_jsonl
 from starter.agent import Agent
 
+ALLOWED_ATTRIBUTES = {
+    "category", "material", "color", "size", "style", "brand",
+    "budget", "feature", "use_case", "other", None,
+}
 
 class InstrumentedAgent:
     def __init__(self, catalog_path: str | Path) -> None:
@@ -38,7 +42,7 @@ class InstrumentedAgent:
     def _is_valid_response(self, response: Any) -> bool:
         if not isinstance(response, dict) or not isinstance(response.get("message"), str):
             return False
-        if response.get("ask_attribute") is not None:
+        if response.get("ask_attribute") not in ALLOWED_ATTRIBUTES:
             return False
         recommendations = response.get("recommendations")
         if not isinstance(recommendations, list) or len(recommendations) > 10:
