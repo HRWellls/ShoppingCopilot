@@ -1,0 +1,32 @@
+{
+  "version": "intent-v2-test",
+  "artifact": "cross-encoder/nli-deberta-v3-xsmall:model_quint8_avx2",
+  "hypothesis_version": "shopping-intent-v2",
+  "strategy": "two_stage",
+  "resolver_version": "intent-resolver-v1",
+  "calibration": "docs/baselines/intent-calibration-v2.json",
+  "dataset": "data/intent_eval_v1.jsonl",
+  "split": "test",
+  "sample_count": 930,
+  "intent_sample_count": 750,
+  "macro_f1": 0.9954954954954954,
+  "buying_to_browsing_rate": 0.0,
+  "continue_recall": 1.0,
+  "event_recall": {
+    "override": 1.0,
+    "clear": 1.0,
+    "negation": 1.0,
+    "no_preference": 1.0,
+    "intent_switch": 1.0
+  },
+  "p50_ms": 0.022150008589960635,
+  "p95_ms": 20.02550000906922,
+  "gate": {
+    "macro_f1": true,
+    "buying_to_browsing": true,
+    "continue_recall": true,
+    "explicit_switch_recall": true,
+    "event_recall": true,
+    "passed": true
+  }
+}

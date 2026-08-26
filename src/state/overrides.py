@@ -6,7 +6,7 @@ from src.models import ConstraintSet, ParsedTurn, SessionState, SlotChange, Slot
 
 
 ALLOWED_SLOTS = frozenset(
-    {"price_min", "price_max", "brand", "color", "material", "category", "size", "occasion", "style"}
+    {"price_min", "price_max", "brand", "color", "material", "category", "size", "occasion", "style", "use_case"}
 )
 
 
@@ -107,7 +107,7 @@ def make_slot(
         confidence=confidence,
         source=source,
         turn_seen=turn,
-        ttl=None if kind == SlotKind.HARD else soft_ttl,
+        ttl=None if kind == SlotKind.HARD or source == "user-confirmed" else soft_ttl,
         negated=negated,
         explicit=explicit,
     )

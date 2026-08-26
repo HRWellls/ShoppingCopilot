@@ -6,6 +6,47 @@ from enum import Enum
 from typing import Any, Mapping
 
 
+STABLE_INTENTS = frozenset({"buying", "browsing", "unknown"})
+
+
+@dataclass(frozen=True)
+class AskedSlotState:
+    slot: str
+    turn: int
+    status: str
+    route: str
+
+    def __post_init__(self) -> None:
+        if not self.slot:
+            raise ValueError("asked slot must not be empty")
+        if self.turn < 1 or self.turn > 10:
+            raise ValueError("asked slot turn must be between 1 and 10")
+        if self.status not in {"asked", "answered", "declined"}:
+            raise ValueError("unsupported asked slot status")
+        if self.route not in STABLE_INTENTS:
+            raise ValueError("unsupported asked slot route")
+
+
+@dataclass(frozen=True)
+class IntentState:
+    label: str = "unknown"
+    confidence: float = 0.0
+    source: str = "default"
+    stable_since_turn: int = 0
+    last_switch_turn: int | None = None
+    switch_reason: str | None = None
+
+    def __post_init__(self) -> None:
+        if self.label not in STABLE_INTENTS:
+            raise ValueError("unsupported stable intent")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("intent confidence must be between 0 and 1")
+        if self.stable_since_turn < 0 or self.stable_since_turn > 10:
+            raise ValueError("stable intent turn must be between 0 and 10")
+        if self.last_switch_turn is not None and not 1 <= self.last_switch_turn <= 10:
+            raise ValueError("intent switch turn must be between 1 and 10")
+
+
 def immutable_mapping(values: Mapping[str, Any] | None = None) -> Mapping[str, Any]:
     return MappingProxyType(dict(values or {}))
 
@@ -33,7 +74,7 @@ class IntentResult:
     evidence: tuple[str, ...] = ()
 
     def __post_init__(self) -> None:
-        if self.label not in {"buying", "browsing", "unknown"}:
+        if self.label not in STABLE_INTENTS:
             raise ValueError("unsupported intent label")
         if not 0.0 <= self.confidence <= 1.0:
             raise ValueError("intent confidence must be between 0 and 1")
@@ -208,6 +249,46 @@ class SessionState:
     conflict_reason: str | None = None
     model_usage: ModelUsage = field(default_factory=ModelUsage)
     last_action: str | None = None
+    intent_state: IntentState = field(default_factory=IntentState)
+    last_asked_slot: str | None = None
+    slot_answers: dict[str, AskedSlotState] = field(default_factory=dict)
+    last_user_message: str = ""
+    previous_user_message: str | None = None
+    last_event_kinds: tuple[str, ...] = ()
+    last_route_plan: Mapping[str, Any] = field(default_factory=immutable_mapping)
+    last_policy_reason: str | None = None
+    last_top10_fingerprint: tuple[str, ...] = ()
+    previous_candidate_count: int | None = None
+    consecutive_no_shrink: int = 0
+    consecutive_stable_top10: int = 0
+    rule_intent: str = "unknown"
+    rule_confidence: float = 0.0
+    model_intent: str | None = None
+    model_confidence: float | None = None
+    model_margin: float | None = None
+    intent_fallback_reason: str | None = None
+    intent_latency_ms: float = 0.0
+    stable_intent_before: str = "unknown"
+
+    def active_slots(self, turn: int | None = None) -> dict[str, SlotValue]:
+        current_turn = self.turn_count if turn is None else turn
+        return {
+            name: value
+            for name, value in self.slots.items()
+            if value.active_weight(current_turn) > 0.0
+        }
+
+    def active_constraints(self, turn: int | None = None) -> ConstraintSet:
+        constraints = ConstraintSet(exclusions=dict(self.constraints.exclusions))
+        for name, slot in self.active_slots(turn).items():
+            if slot.negated:
+                values = slot.value if isinstance(slot.value, (list, tuple, set, frozenset)) else (slot.value,)
+                current = set(constraints.exclusions.get(name, frozenset()))
+                current.update(str(value).casefold() for value in values)
+                constraints.exclusions[name] = frozenset(current)
+            elif hasattr(constraints, name):
+                setattr(constraints, name, slot.value)
+        return constraints
 
 
 @dataclass(frozen=True)
@@ -232,6 +313,21 @@ class TraceEvent:
     candidate_sources: tuple[str, ...] = ()
     asked_slot: str | None = None
     model_usage: ModelUsage = field(default_factory=ModelUsage)
+    route_plan: Mapping[str, Any] = field(default_factory=immutable_mapping)
+    policy_reason: str | None = None
+    detected_events: tuple[str, ...] = ()
+    rule_intent: str = "unknown"
+    rule_confidence: float = 0.0
+    model_intent: str | None = None
+    model_confidence: float | None = None
+    model_margin: float | None = None
+    stable_intent_before: str = "unknown"
+    intent_switched: bool = False
+    switch_reason: str | None = None
+    slot_answer_status: str | None = None
+    intent_model_mode: str = "off"
+    intent_fallback_reason: str | None = None
+    intent_latency_ms: float = 0.0
 
     def as_dict(self) -> dict[str, Any]:
         return {
@@ -254,6 +350,21 @@ class TraceEvent:
             "relaxation_level": self.relaxation_level,
             "candidate_sources": list(self.candidate_sources),
             "asked_slot": self.asked_slot,
+            "route_plan": dict(self.route_plan),
+            "policy_reason": self.policy_reason,
+            "detected_events": list(self.detected_events),
+            "rule_intent": self.rule_intent,
+            "rule_confidence": self.rule_confidence,
+            "model_intent": self.model_intent,
+            "model_confidence": self.model_confidence,
+            "model_margin": self.model_margin,
+            "stable_intent_before": self.stable_intent_before,
+            "intent_switched": self.intent_switched,
+            "switch_reason": self.switch_reason,
+            "slot_answer_status": self.slot_answer_status,
+            "intent_model_mode": self.intent_model_mode,
+            "intent_fallback_reason": self.intent_fallback_reason,
+            "intent_latency_ms": round(self.intent_latency_ms, 3),
             "model_usage": {
                 "prompt_tokens": self.model_usage.prompt_tokens,
                 "completion_tokens": self.model_usage.completion_tokens,

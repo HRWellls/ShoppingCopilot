@@ -1,0 +1,15 @@
+{
+  "buying_to_browsing_rate": 0.0,
+  "calibration_macro_f1": 0.9440559440559441,
+  "dataset": "data/intent_eval_v1.jsonl",
+  "hypothesis_version": "shopping-intent-v2",
+  "initial_confidence": 0.7697592359050714,
+  "initial_margin": 0.07,
+  "resolver_version": "intent-resolver-v1",
+  "sample_count": 750,
+  "split": "calibration",
+  "strategy": "two_stage",
+  "switch_confidence": 0.8,
+  "switch_margin": 0.1,
+  "version": "intent-calibration-v2"
+}

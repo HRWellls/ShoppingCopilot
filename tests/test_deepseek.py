@@ -51,7 +51,8 @@ class DeepSeekTest(unittest.TestCase):
             path.write_text("DEEPSEEK_API_KEY=value-secret", encoding="utf-8")
             self.assertEqual(load_api_key(config, {}), "value-secret")
             path.chmod(0o644)
-            with self.assertRaises(AgentError): load_api_key(config, {})
+            if os.name != "nt":
+                with self.assertRaises(AgentError): load_api_key(config, {})
 
     def test_valid_parse_usage_and_schema_rejection(self) -> None:
         config = AgentConfig(llm_enabled=True)

@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from copy import deepcopy
+from copy import copy, deepcopy
 from types import MappingProxyType
 from typing import Any
 
@@ -34,6 +34,30 @@ class SessionStateStore:
 
     def begin_turn(self, session_id: str, turn: int, message: str) -> SessionState:
         state = self.get(session_id)
+        self._validate_turn(state, turn, message)
+        state.turn_count = turn
+        state.previous_user_message = state.last_user_message or None
+        state.last_user_message = message
+        state.history.append(message)
+        return state
+
+    def begin_transaction(self, session_id: str, turn: int, message: str) -> SessionState:
+        current = self.get(session_id)
+        self._validate_turn(current, turn, message)
+        state = self._clone(current)
+        state.turn_count = turn
+        state.previous_user_message = state.last_user_message or None
+        state.last_user_message = message
+        state.history.append(message)
+        return state
+
+    def commit(self, state: SessionState) -> None:
+        current = self.get(state.session_id)
+        if state.turn_count != current.turn_count + 1:
+            raise AgentError(ErrorCode.PROTOCOL, "cannot commit stale session transaction")
+        self._sessions[state.session_id] = state
+
+    def _validate_turn(self, state: SessionState, turn: int, message: str) -> None:
         if isinstance(turn, bool) or not isinstance(turn, int):
             raise AgentError(ErrorCode.PROTOCOL, "turn must be an integer")
         if turn < 1 or turn > self._config.max_turns:
@@ -43,9 +67,19 @@ class SessionStateStore:
             raise AgentError(ErrorCode.PROTOCOL, f"expected turn {expected}")
         if not isinstance(message, str):
             raise AgentError(ErrorCode.INPUT_TYPE, "user_message must be a string")
-        state.turn_count = turn
-        state.history.append(message)
-        return state
+
+    @staticmethod
+    def _clone(state: SessionState) -> SessionState:
+        cloned = copy(state)
+        cloned.constraints = state.constraints.copy()
+        cloned.slots = dict(state.slots)
+        cloned.slot_history = list(state.slot_history)
+        cloned.history = list(state.history)
+        cloned.candidate_ids = list(state.candidate_ids)
+        cloned.candidate_pool = list(state.candidate_pool)
+        cloned.asked_slots = set(state.asked_slots)
+        cloned.slot_answers = dict(state.slot_answers)
+        return cloned
 
     def save(self, state: SessionState) -> None:
         current = self.get(state.session_id)

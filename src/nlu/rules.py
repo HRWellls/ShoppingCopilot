@@ -22,6 +22,8 @@ CATEGORY_PHRASES = (
     "jackets", "jacket", "pants", "jeans", "earrings", "rings", "ring", "watches",
     "watch", "bags", "bag", "sneakers", "sneaker", "sandals", "sandal", "jewelry",
 )
+STYLE_WORDS = ("casual", "formal", "sporty", "classic", "vintage", "minimalist", "elegant", "streetwear", "relaxed")
+USE_CASE_WORDS = ("hiking", "running", "gym", "winter", "outdoor", "work", "travel", "wedding", "party", "office")
 
 
 class RuleConstraintExtractor:
@@ -69,6 +71,7 @@ class RuleConstraintExtractor:
         intent = RuleIntentRouter().route(message)
         updates = self.extract(message)
         normalized = normalize_key(message)
+        self._bind_short_answer(updates, normalized, state)
         clears: set[str] = set()
         overrides: set[str] = set()
         slots = {}
@@ -82,8 +85,12 @@ class RuleConstraintExtractor:
             slots[name] = make_slot(value, name=name, turn=state.turn_count, soft_ttl=soft_ttl)
             if explicit_override or name in state.slots:
                 overrides.add(name)
+        for name, value in self._semantic_slots(normalized).items():
+            slots[name] = make_slot(value, name=name, turn=state.turn_count, soft_ttl=soft_ttl)
+            if explicit_override or name in state.slots:
+                overrides.add(name)
         negated = re.search(
-            r"\b(?:not|no|without|don't want|do not want)\s+(black|white|blue|red|pink|green|brown|gray|grey|purple|yellow|orange)\b",
+            r"\b(?:anything\s+except|except|not|no|without|don't want|do not want)\s+(black|white|blue|red|pink|green|brown|gray|grey|purple|yellow|orange)\b",
             normalized,
         )
         if negated:
@@ -100,6 +107,36 @@ class RuleConstraintExtractor:
             evidence=intent.evidence,
             parser_source="rule",
         )
+
+    @staticmethod
+    def _semantic_slots(normalized: str) -> dict[str, str]:
+        result: dict[str, str] = {}
+        styles = [word for word in STYLE_WORDS if re.search(rf"\b{re.escape(word)}\b", normalized)]
+        uses = [word for word in USE_CASE_WORDS if re.search(rf"\b{re.escape(word)}\b", normalized)]
+        if styles:
+            result["style"] = " ".join(styles)
+        if uses:
+            result["use_case"] = " ".join(uses)
+        occasion = re.search(r"\b(?:for|to)\s+(?:a|an|the)?\s*(wedding|party|office|vacation|trip|event|date night)\b", normalized)
+        if occasion:
+            result["occasion"] = occasion.group(1)
+        return result
+
+    @staticmethod
+    def _bind_short_answer(updates: ConstraintSet, normalized: str, state: SessionState) -> None:
+        slot = state.last_asked_slot
+        if not slot or len(normalized.split()) > 5 or not normalized:
+            return
+        if slot == "size" and updates.size is None:
+            match = re.fullmatch(r"(?:size\s*)?(xxs|xs|s|m|l|xl|xxl|\d{1,2}(?:\.5)?)", normalized)
+            if match:
+                updates.size = match.group(1).casefold()
+        elif slot == "brand" and updates.brand is None and not re.search(r"\b(?:any|none|no preference|doesn't matter|do not care)\b", normalized):
+            updates.brand = clean_text(normalized)
+        elif slot == "price_max" and updates.price_max is None:
+            match = re.fullmatch(r"\$?([0-9]+(?:\.[0-9]+)?)", normalized)
+            if match:
+                updates.price_max = float(match.group(1))
 
 
 def merge_constraints(current: ConstraintSet, updates: ConstraintSet) -> ConstraintSet:

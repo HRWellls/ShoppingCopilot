@@ -7,11 +7,13 @@ from src.catalog.store import CatalogStore
 from src.config import AgentConfig
 from src.errors import AgentError, ErrorCode
 from src.models import FilterReport, ModelUsage, SessionState, TraceEvent
-from src.nlu import DeepSeekStructuredParser, FallbackStructuredParser, RuleConstraintExtractor
+from src.nlu import DeepSeekStructuredParser, FallbackStructuredParser, IntentResolver, RuleConstraintExtractor, RuleEventDetector
+from src.nlu.intent.schema import RuleIntentObservation, TurnObservation
+from src.nlu.intent.nli import load_intent_classifier
 from src.observability import TraceRecorder
 from src.output import make_response, sanitize_candidates
 from src.retrieval import BM25Index, DenseIndex, HardFilter, HybridRetriever, SentenceTransformerProvider
-from src.state import OverrideResolver, SessionStateStore
+from src.state import OverrideResolver, SessionStateStore, TurnStateReducer
 from src.dialogue import ClarificationPolicy, render_question
 
 
@@ -33,6 +35,16 @@ class ShoppingAgentCore:
             model_parser = DeepSeekStructuredParser(config, **kwargs)
         self.parser = FallbackStructuredParser(self.extractor, model_parser, config.soft_slot_ttl)
         self.override_resolver = OverrideResolver()
+        self.event_detector = RuleEventDetector()
+        self.intent_resolver = IntentResolver(config)
+        self.state_reducer = TurnStateReducer()
+        self.intent_classifier = None
+        self.intent_startup_fallback: str | None = None
+        if config.intent_model_mode != "off":
+            try:
+                self.intent_classifier = load_intent_classifier(config)
+            except AgentError as exc:
+                self.intent_startup_fallback = exc.code.value
         self.hard_filter = HardFilter(self.catalog, config.cache_entries)
         self.index = BM25Index(self.catalog, config)
         self.dense_fallback: str | None = None
@@ -67,13 +79,49 @@ class ShoppingAgentCore:
         model_usage = ModelUsage()
         try:
             self._validate_top_k(top_k)
-            state = self.sessions.begin_turn(session_id, turn, user_message)
+            transactional = self.config.multiturn_state_enabled
+            state = (
+                self.sessions.begin_transaction(session_id, turn, user_message)
+                if transactional else self.sessions.begin_turn(session_id, turn, user_message)
+            )
             parsed, model_usage, parser_fallback = self.parser.parse(user_message, state)
             fallback_reason = parser_fallback or fallback_reason
-            if parsed.intent != "unknown" or state.intent == "unknown":
-                state.intent = parsed.intent
-                state.intent_confidence = parsed.intent_confidence
-            self.override_resolver.apply(state, parsed)
+            if transactional:
+                events = self.event_detector.detect(user_message, state, parsed)
+                valid_answer = bool(state.last_asked_slot and state.last_asked_slot in parsed.slot_updates)
+                rule = RuleIntentObservation(
+                    parsed.intent,
+                    parsed.intent_confidence,
+                    parsed.evidence,
+                    parsed.intent != "unknown" and parsed.intent_confidence >= 0.6,
+                )
+                stable_before = state.intent_state.label
+                state.stable_intent_before = stable_before
+                model_observation = None
+                state.intent_fallback_reason = self.intent_startup_fallback
+                if self.intent_classifier is not None:
+                    intent_started = time.perf_counter()
+                    try:
+                        model_observation = self.intent_classifier.classify(state, user_message)
+                    except AgentError as exc:
+                        state.intent_fallback_reason = exc.code.value
+                        self.intent_classifier = None
+                    finally:
+                        state.intent_latency_ms = (time.perf_counter() - intent_started) * 1_000
+                state.rule_intent = rule.label
+                state.rule_confidence = rule.confidence
+                state.model_intent = model_observation.label if model_observation else None
+                state.model_confidence = model_observation.confidence if model_observation else None
+                state.model_margin = model_observation.margin if model_observation else None
+                resolved = self.intent_resolver.resolve(
+                    state, TurnObservation(rule, events, model_observation, valid_answer)
+                )
+                self.state_reducer.reduce(state, parsed, events, resolved)
+            else:
+                if parsed.intent != "unknown" or state.intent == "unknown":
+                    state.intent = parsed.intent
+                    state.intent_confidence = parsed.intent_confidence
+                self.override_resolver.apply(state, parsed)
             state.last_query = parsed.query_text or user_message
             self.hybrid.bm25 = self.index
             retrieval = self.hybrid.retrieve(state) if not state.conflict_reason else None
@@ -82,6 +130,7 @@ class ShoppingAgentCore:
                 report = retrieval.filter_report
                 state.relaxation_level = retrieval.relaxation.level
                 fallback_reason = retrieval.dense_fallback or fallback_reason
+                state.last_route_plan = retrieval.plan.as_dict() if retrieval.plan is not None else {}
             candidate_count = len(candidates)
             state.candidate_pool = candidates
             top_ids = sanitize_candidates(candidates, self.catalog, top_k)
@@ -93,7 +142,10 @@ class ShoppingAgentCore:
             decision = self.policy.decide(state, candidates)
             if decision.action == "clarify" and decision.slot:
                 asked_slot = decision.slot
-                state.asked_slots.add(decision.slot)
+                if transactional:
+                    self.state_reducer.record_question(state, decision.slot)
+                else:
+                    state.asked_slots.add(decision.slot)
                 state.last_action = "clarify"
                 response = make_response(
                     render_question(decision.slot), top_ids,
@@ -106,7 +158,10 @@ class ShoppingAgentCore:
                 state.last_action = "empty"
                 error_code = ErrorCode.EMPTY_RESULT
                 response = make_response(EMPTY_MESSAGE, (), usage=model_usage)
-            self.sessions.save(state)
+            if transactional:
+                self.sessions.commit(state)
+            else:
+                self.sessions.save(state)
         except AgentError as exc:
             fallback = True
             error_code = exc.code
@@ -172,7 +227,7 @@ class ShoppingAgentCore:
             turn=turn if isinstance(turn, int) and not isinstance(turn, bool) else 0,
             intent=state.intent if state is not None else "unknown",
             intent_confidence=state.intent_confidence if state is not None else 0.0,
-            constraint_names=state.constraints.active_names() if state is not None else (),
+            constraint_names=state.active_constraints().active_names() if state is not None else (),
             route=state.intent if state is not None else "unknown",
             filter_report=report.as_dict(),
             candidate_count=candidate_count,
@@ -188,5 +243,20 @@ class ShoppingAgentCore:
             candidate_sources=tuple(sorted({source for candidate in state.candidate_pool for source in candidate.sources})) if state else (),
             asked_slot=asked_slot,
             model_usage=model_usage,
+            route_plan=state.last_route_plan if state else {},
+            policy_reason=state.last_policy_reason if state else None,
+            detected_events=state.last_event_kinds if state else (),
+            rule_intent=state.rule_intent if state else "unknown",
+            rule_confidence=state.rule_confidence if state else 0.0,
+            model_intent=state.model_intent if state else None,
+            model_confidence=state.model_confidence if state else None,
+            model_margin=state.model_margin if state else None,
+            stable_intent_before=state.stable_intent_before if state else "unknown",
+            intent_switched=bool(state and state.intent_state.last_switch_turn == state.turn_count),
+            switch_reason=state.intent_state.switch_reason if state else None,
+            slot_answer_status=(state.slot_answers[state.last_asked_slot].status if state and state.last_asked_slot in state.slot_answers else None),
+            intent_model_mode=self.config.intent_model_mode,
+            intent_fallback_reason=state.intent_fallback_reason if state else self.intent_startup_fallback,
+            intent_latency_ms=state.intent_latency_ms if state else 0.0,
         )
         self.trace.record(event)

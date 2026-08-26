@@ -31,11 +31,31 @@ class AgentConfig:
     clarification_enabled: bool = True
     clarify_count_threshold: int = 100
     late_turn: int = 8
+    clarification_margin_threshold: float = 0.01
+    clarification_no_shrink_limit: int = 4
+    clarification_stability_turns: int = 3
     llm_enabled: bool = False
     llm_model: str = "deepseek-v4-flash"
     llm_endpoint: str = "https://api.deepseek.com/chat/completions"
     llm_timeout_ms: int = 600
     llm_max_response_bytes: int = 64_000
+    multiturn_state_enabled: bool = False
+    intent_routing_enabled: bool = False
+    intent_policy_enabled: bool = False
+    intent_model_mode: str = "off"
+    intent_model_id: str = "cross-encoder/nli-deberta-v3-xsmall"
+    intent_classifier_strategy: str = "single"
+    intent_hypothesis_version: str = "shopping-intent-v1"
+    intent_model_switch_enabled: bool = True
+    intent_model_path: Path | None = None
+    intent_manifest_path: Path | None = None
+    intent_input_max_chars: int = 800
+    intent_initial_confidence: float = 0.80
+    intent_initial_margin: float = 0.15
+    intent_switch_confidence: float = 0.90
+    intent_switch_margin: float = 0.20
+    intent_timeout_ms: int = 100
+    intent_p95_budget_ms: float = 25.0
     api_key_env: str = "DEEPSEEK_API_KEY"
     api_key_path: Path = Path("api.env")
     max_turns: int = 10
@@ -48,6 +68,10 @@ class AgentConfig:
         object.__setattr__(self, "api_key_path", Path(self.api_key_path))
         if self.dense_model_path is not None:
             object.__setattr__(self, "dense_model_path", Path(self.dense_model_path))
+        if self.intent_model_path is not None:
+            object.__setattr__(self, "intent_model_path", Path(self.intent_model_path))
+        if self.intent_manifest_path is not None:
+            object.__setattr__(self, "intent_manifest_path", Path(self.intent_manifest_path))
         positive = {
             "description_max_chars": self.description_max_chars,
             "query_token_limit": self.query_token_limit,
@@ -61,8 +85,12 @@ class AgentConfig:
             "soft_slot_ttl": self.soft_slot_ttl,
             "clarify_count_threshold": self.clarify_count_threshold,
             "late_turn": self.late_turn,
+            "clarification_no_shrink_limit": self.clarification_no_shrink_limit,
+            "clarification_stability_turns": self.clarification_stability_turns,
             "llm_timeout_ms": self.llm_timeout_ms,
             "llm_max_response_bytes": self.llm_max_response_bytes,
+            "intent_input_max_chars": self.intent_input_max_chars,
+            "intent_timeout_ms": self.intent_timeout_ms,
             "max_turns": self.max_turns,
         }
         for name, value in positive.items():
@@ -79,10 +107,30 @@ class AgentConfig:
                 raise ValueError("retrieval weights must contain four non-negative values")
         if not self.config_version.strip():
             raise ValueError("config_version must not be empty")
+        if self.intent_model_mode not in {"off", "shadow", "active"}:
+            raise ValueError("intent_model_mode must be off, shadow, or active")
+        if self.intent_classifier_strategy not in {"single", "two_stage"}:
+            raise ValueError("intent_classifier_strategy must be single or two_stage")
+        if self.intent_hypothesis_version not in {"shopping-intent-v1", "shopping-intent-v2"}:
+            raise ValueError("intent_hypothesis_version is unsupported")
+        for name, value in {
+            "intent_initial_confidence": self.intent_initial_confidence,
+            "intent_initial_margin": self.intent_initial_margin,
+            "intent_switch_confidence": self.intent_switch_confidence,
+            "intent_switch_margin": self.intent_switch_margin,
+        }.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.0 <= value <= 1.0:
+                raise ValueError(f"{name} must be between 0 and 1")
+        if isinstance(self.intent_p95_budget_ms, bool) or self.intent_p95_budget_ms <= 0:
+            raise ValueError("intent_p95_budget_ms must be positive")
+        if isinstance(self.clarification_margin_threshold, bool) or self.clarification_margin_threshold < 0:
+            raise ValueError("clarification_margin_threshold must be non-negative")
 
     def public_snapshot(self) -> dict[str, object]:
         return {
             name: str(value) if isinstance(value, Path) else value
             for name, value in self.__dict__.items()
-            if name not in {"api_key_env", "api_key_path"}
+            if name not in {
+                "api_key_env", "api_key_path", "intent_model_path", "intent_manifest_path"
+            }
         }

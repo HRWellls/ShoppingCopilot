@@ -131,6 +131,12 @@ On the released public set, `no-clarification` returned to the Stage 2 score (`0
 
 `no-clarification` disables follow-up questions: the Agent returns its current Top 10 without asking for a missing category, budget, size, color, brand, or material. `no-relaxation` keeps clarification but disables safe empty-result recovery: if all hard filters produce no candidates, the Agent does not retry after removing brand, color/material, or expanding a category synonym. Budget and explicit exclusions are never silently relaxed in either mode.
 
+### Multi-turn intent routing
+
+The optional multi-turn path adds transactional event reduction, Buying/Browsing-specific retrieval, and route-aware clarification. The local NLI classifier supports `off`, observational `shadow`, and gated `active` modes; its release default is `off` because the active end-to-end ablation did not beat the B3 rule-only gate. Model-off needs no optional NLI dependencies or artifact, and runtime code never downloads model files.
+
+See `docs/intent_routing.md` for feature flags, offline artifact preparation and verification, benchmark commands, frozen report locations, failure fallback, and rollback steps.
+
 ### Persistent dense retrieval
 
 Dense retrieval requires NumPy plus a locally available sentence-transformers model. The Agent never downloads a model during startup. Configure a local path explicitly:

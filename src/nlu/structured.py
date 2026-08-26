@@ -16,7 +16,7 @@ from src.nlu.rules import RuleConstraintExtractor
 
 
 ALLOWED_TOP_LEVEL = frozenset({"intent", "intent_confidence", "slot_updates", "clears", "overrides", "query_text", "evidence"})
-ALLOWED_SLOTS = frozenset({"price_min", "price_max", "brand", "color", "material", "category", "size", "occasion", "style"})
+ALLOWED_SLOTS = frozenset({"price_min", "price_max", "brand", "color", "material", "category", "size", "occasion", "style", "use_case"})
 
 
 class StructuredParser(Protocol):
@@ -33,7 +33,9 @@ def load_api_key(config: AgentConfig, environ: dict[str, str] | None = None) -> 
         return None
     try:
         mode = stat.S_IMODE(path.stat().st_mode)
-        if mode & 0o077:
+        # Windows exposes synthetic POSIX mode bits, so they cannot reliably
+        # represent the file ACL that protects this local secret.
+        if os.name != "nt" and mode & 0o077:
             raise AgentError(ErrorCode.PROTOCOL, "api.env permissions must be 0600")
         raw = path.read_text(encoding="utf-8").strip()
     except OSError as exc:

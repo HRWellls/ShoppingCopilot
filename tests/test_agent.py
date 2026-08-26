@@ -109,6 +109,20 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(actual, expected)
         self.assertTrue(failing._core.trace.degraded)
 
+    def test_public_contract_is_stable_and_invalid_turn_does_not_advance(self) -> None:
+        agent = self.make_agent()
+        agent.reset("session", profile())
+        first = agent.respond("session", "running shoes", 1, 10)
+        self.assertEqual(set(first), {"message", "ask_attribute", "recommendations", "usage"})
+        ids = [item["parent_asin"] for item in first["recommendations"]]
+        self.assertEqual(ids, list(dict.fromkeys(ids)))
+        state = agent._core.sessions.get("session")
+        self.assertEqual(state.turn_count, 1)
+        agent.respond("session", "skip a turn", 3, 10)
+        self.assertEqual(agent._core.sessions.get("session").turn_count, 1)
+        second = agent.respond("session", "under $100", 2, 10)
+        self.assert_contract(second)
+
 
 if __name__ == "__main__":
     unittest.main()

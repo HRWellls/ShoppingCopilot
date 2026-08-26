@@ -50,7 +50,7 @@ class Phase3StateTest(unittest.TestCase):
         self.assertEqual(self.resolver.detect_conflict(self.state), "price_range_conflict")
 
     def test_soft_slot_weight_decays_without_deletion(self) -> None:
-        slot = make_slot("black", name="color", turn=1, soft_ttl=3)
+        slot = make_slot("black", name="color", turn=1, source="model", soft_ttl=3)
         self.assertEqual(slot.active_weight(1), 1.0)
         self.assertEqual(slot.active_weight(4), 0.0)
         self.assertEqual(slot.value, "black")

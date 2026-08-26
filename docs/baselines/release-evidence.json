@@ -1,0 +1,35 @@
+{
+  "version": "multiturn-intent-routing-release-v1",
+  "selected_default_mode": "off",
+  "selection_source": "scripts/check_active_gate.py",
+  "b3": {
+    "report": "docs/baselines/multiturn-b3.json",
+    "technical_score": 0.331459,
+    "gate_passed": true
+  },
+  "active_d": {
+    "report": "docs/baselines/multiturn-model-ablation.json",
+    "technical_score": 0.309576,
+    "gate_passed": false,
+    "p95_overhead_ms": 72.174
+  },
+  "intent_evaluation": {
+    "report": "docs/baselines/intent-v2-test.json",
+    "macro_f1": 0.9954954954954954,
+    "gate_passed": true
+  },
+  "configuration": {
+    "config_version": "phase3-hybrid-v1",
+    "hypothesis_version": "shopping-intent-v2",
+    "resolver_version": "intent-resolver-v1",
+    "calibration_version": "intent-calibration-v2",
+    "strategy": "two_stage"
+  },
+  "artifact": {
+    "model_id": "cross-encoder/nli-deberta-v3-xsmall",
+    "variant": "model_quint8_avx2",
+    "runtime": "onnxruntime-int8",
+    "model_sha256": "21b14751a95520953bfcc607ceeb617de7cbeaeb6d60f4c8966716c743985337",
+    "tokenizer_sha256": "5124ef2ead1a10a717703bc436de7f353da76d6340e4587719b42b1693707964"
+  }
+}

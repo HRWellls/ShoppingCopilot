@@ -22,3 +22,5 @@ openspec/
 .codex/
 api.env
 .venv/
+.agents/skills
+.openspec
