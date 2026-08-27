@@ -158,9 +158,15 @@ def evaluate_with_diagnostics(
                 override_state_failure = True
             turn_record = {
                 "turn": turn,
+                "user_message": user_message,
+                "response_message": response.get("message", ""),
+                "response_action": getattr(state, "last_action", None),
+                "fallback": response.get("message", "").startswith("I couldn't process"),
                 "route": getattr(state, "intent", "unknown"),
                 "active_constraints": state.active_constraints().as_dict() if state is not None else {},
                 "query_evidence": dict(getattr(state, "query_evidence", {}) or {}),
+                "conflict_reason": getattr(state, "conflict_reason", None) if state is not None else None,
+                "relaxation_level": getattr(state, "relaxation_level", 0) if state is not None else 0,
                 "retrieval_timings": dict(getattr(state, "last_retrieval_timings", {}) or {}),
                 "candidate_count": len(pool),
                 "target_ranks": {name: _rank(list(values), target) for name, values in stages.items()},
@@ -207,6 +213,7 @@ def evaluate_with_diagnostics(
         sessions.append({
             "sample_id": sample["sample_id"],
             "scenario_type": sample["scenario_type"],
+            "target_parent_asin": target,
             "hit": hit_turn is not None,
             "first_hit_turn": hit_turn,
             "best_rank": best_rank,

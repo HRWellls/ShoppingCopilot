@@ -26,8 +26,8 @@ CATEGORY_PHRASES = (
     "tunics", "shorts", "slippers", "necklaces", "bracelets",
 )
 STYLE_WORDS = ("casual", "formal", "sporty", "classic", "vintage", "minimalist", "elegant", "streetwear", "relaxed")
-USE_CASE_WORDS = ("hiking", "running", "gym", "winter", "outdoor", "work", "travel", "wedding", "party", "office")
-
+# USE_CASE_WORDS = ("hiking", "running", "gym", "winter", "outdoor", "work", "travel", "wedding", "party", "office")
+USE_CASE_WORDS =()
 
 class RuleConstraintExtractor:
     def extract(self, message: str) -> ConstraintSet:
