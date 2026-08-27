@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from src.catalog.normalize import clean_text, normalize_collection, normalize_key, parse_price
+from src.catalog.normalize import canonical_category, clean_text, normalize_collection, normalize_key, parse_price
 from src.catalog.store import CatalogStore
 from src.config import AgentConfig
 from src.errors import AgentError, ErrorCode
@@ -20,6 +20,7 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(parse_price("USD $1,299.50"), 1299.5)
         self.assertIsNone(parse_price("not available"))
         self.assertIsNone(parse_price(-1))
+        self.assertEqual(canonical_category("Sneakers"), "shoes")
 
     def test_store_loads_products_and_preserves_missing_values(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
@@ -30,6 +31,9 @@ class CatalogTest(unittest.TestCase):
             self.assertEqual(store.require("SHOE_BLACK_9").brand_key, "swiftstep")
             self.assertIsNone(store.require("UNKNOWN_PRICE_BOOT").price)
             self.assertIn("black", store.attribute_values("SHOE_BLACK_9", "color"))
+            self.assertIn("running", store.attribute_values("SHOE_BLACK_9", "use_case"))
+            self.assertIn("cotton", " ".join(store.attribute_values("SHIRT_BLUE_M", "feature")))
+            self.assertEqual(store.attribute_values("UNKNOWN_PRICE_BOOT", "price"), frozenset())
             self.assertEqual(len(store.checksum), 64)
 
     def test_checksum_is_stable_and_products_are_read_only(self) -> None:

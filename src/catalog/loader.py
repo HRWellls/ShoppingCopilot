@@ -9,11 +9,15 @@ from typing import Any, Iterator, Mapping
 from src.catalog.normalize import (
     COLORS,
     MATERIALS,
+    STYLES,
+    USE_CASES,
+    canonical_category,
     clean_text,
     extract_sizes,
     normalize_collection,
     normalize_key,
     parse_price,
+    price_bucket,
     token_values,
 )
 from src.config import AgentConfig
@@ -46,13 +50,18 @@ def _product_from_record(record: Mapping[str, Any], order: int, config: AgentCon
     colors = frozenset("gray" if value == "grey" else value for value in token_values(attribute_source, COLORS))
     materials = token_values(attribute_source, MATERIALS)
     sizes = extract_sizes(attribute_source)
+    parsed_price = parse_price(record.get("price"))
     attributes = MappingProxyType(
         {
             "color": colors,
             "material": materials,
             "size": sizes,
-            "category": frozenset(normalize_key(item) for item in categories if item),
+            "category": frozenset(canonical_category(item) for item in categories if item),
             "brand": frozenset({normalize_key(brand)}) if brand else frozenset(),
+            "use_case": token_values(attribute_source, USE_CASES),
+            "style": token_values(attribute_source, STYLES),
+            "feature": frozenset(normalize_key(item) for item in (*features, *details) if item),
+            "price": frozenset({price_bucket(parsed_price)}) if price_bucket(parsed_price) else frozenset(),
         }
     )
     searchable_parts = [title, title, title]
@@ -72,7 +81,7 @@ def _product_from_record(record: Mapping[str, Any], order: int, config: AgentCon
         categories=categories,
         brand=brand,
         brand_key=normalize_key(brand) or None,
-        price=parse_price(record.get("price")),
+        price=parsed_price,
         features=features,
         description=description,
         searchable_text=searchable_text,

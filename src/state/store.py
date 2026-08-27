@@ -77,6 +77,9 @@ class SessionStateStore:
         cloned.history = list(state.history)
         cloned.candidate_ids = list(state.candidate_ids)
         cloned.candidate_pool = list(state.candidate_pool)
+        cloned.last_retrieval_stages = MappingProxyType(dict(state.last_retrieval_stages))
+        cloned.last_retrieval_timings = MappingProxyType(dict(state.last_retrieval_timings))
+        cloned.query_evidence = dict(state.query_evidence)
         cloned.asked_slots = set(state.asked_slots)
         cloned.slot_answers = dict(state.slot_answers)
         return cloned

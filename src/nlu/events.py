@@ -11,7 +11,7 @@ SLOT_WORDS = {
     "brand": "brand", "color": "color", "colour": "color", "size": "size",
     "budget": "price_max", "price": "price_max", "material": "material",
     "category": "category", "style": "style", "occasion": "occasion",
-    "use case": "use_case", "use-case": "use_case",
+    "use case": "use_case", "use-case": "use_case", "feature": "feature",
 }
 COLOR_WORDS = "black|white|blue|red|pink|green|brown|gray|grey|purple|yellow|orange"
 
@@ -26,7 +26,7 @@ class RuleEventDetector:
         events: list[TurnEvent] = []
         named = _named_slots(normalized)
 
-        no_preference = bool(re.search(r"\b(?:no|don't have|do not have|without)\s+(?:a\s+)?(?:\w+\s+)?preference\b|\bany\s+(?:brand|color|size|material)\b.*\bfine\b|\b(?:brand|color|size|material)\s+does(?:n't| not)\s+matter\b", normalized))
+        no_preference = bool(re.search(r"\b(?:no|don't have|do not have|without)\s+(?:(?:a|an)\s+)?(?:\w+\s+)?preference\b|\bany\s+(?:brand|color|size|material)\b.*\bfine\b|\b(?:brand|color|size|material)\s+does(?:n't| not)\s+matter\b", normalized))
         if no_preference:
             slots = named or (frozenset({state.last_asked_slot}) if state.last_asked_slot else frozenset())
             if slots:

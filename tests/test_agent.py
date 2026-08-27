@@ -10,7 +10,7 @@ from src.errors import AgentError, ErrorCode
 from src.models import Candidate
 from src.output import sanitize_candidates
 from starter.agent import Agent
-from tests.fixtures import profile, write_catalog
+from tests.fixtures import CATALOG_ROWS, profile, write_catalog
 
 
 class RaisingIndex:
@@ -122,6 +122,26 @@ class AgentTest(unittest.TestCase):
         self.assertEqual(agent._core.sessions.get("session").turn_count, 1)
         second = agent.respond("session", "under $100", 2, 10)
         self.assert_contract(second)
+
+    def test_d3_clarification_keeps_top_ten_recommendations(self) -> None:
+        rows = tuple(
+            {**row, "parent_asin": f"{row['parent_asin']}_{index}"}
+            for index in range(3)
+            for row in CATALOG_ROWS
+        )
+        catalog = write_catalog(self.root / "d3-catalog.jsonl", rows)
+        agent = Agent(config=AgentConfig(
+            catalog_path=catalog,
+            multiturn_state_enabled=True,
+            intent_routing_enabled=True,
+            intent_policy_enabled=True,
+            recommendation_with_clarification_enabled=True,
+        ))
+        agent.reset("d3", profile())
+        response = agent.respond("d3", "I", 1, 10)
+        self.assertIsNotNone(response["ask_attribute"])
+        self.assertEqual(len(response["recommendations"]), 10)
+        self.assertEqual(set(response), {"message", "ask_attribute", "recommendations", "usage"})
 
 
 if __name__ == "__main__":

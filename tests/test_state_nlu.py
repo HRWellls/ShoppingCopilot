@@ -69,6 +69,8 @@ class RuleNluTest(unittest.TestCase):
         self.assertEqual(result.price_max, 100.0)
         brand = self.extractor.extract("shoes from Nike under $80")
         self.assertEqual(brand.brand, "Nike")
+        underwear = self.extractor.extract("looking for women panties; machine wash with laundry bag")
+        self.assertEqual(underwear.category, "panties")
 
     def test_constraints_accumulate_and_replace_same_field(self) -> None:
         store = SessionStateStore(AgentConfig())
@@ -83,6 +85,13 @@ class RuleNluTest(unittest.TestCase):
         apply_rule_turn(state, "white would be better", self.extractor)
         self.assertEqual(state.constraints.color, "white")
         self.assertNotIn("black", state.last_query)
+
+    def test_non_category_answer_does_not_replace_category_from_incidental_word(self) -> None:
+        store = SessionStateStore(AgentConfig())
+        state = store.reset("A", profile())
+        state.last_asked_slot = "feature"
+        parsed = self.extractor.parse("machine wash with a laundry bag", state)
+        self.assertIsNone(parsed.slot_updates.get("category"))
 
 
 if __name__ == "__main__":

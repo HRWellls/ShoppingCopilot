@@ -37,7 +37,7 @@ class ShoppingAgentCore:
         self.override_resolver = OverrideResolver()
         self.event_detector = RuleEventDetector()
         self.intent_resolver = IntentResolver(config)
-        self.state_reducer = TurnStateReducer()
+        self.state_reducer = TurnStateReducer(config.override_invalidation_enabled)
         self.intent_classifier = None
         self.intent_startup_fallback: str | None = None
         if config.intent_model_mode != "off":
@@ -131,6 +131,8 @@ class ShoppingAgentCore:
                 state.relaxation_level = retrieval.relaxation.level
                 fallback_reason = retrieval.dense_fallback or fallback_reason
                 state.last_route_plan = retrieval.plan.as_dict() if retrieval.plan is not None else {}
+                state.last_retrieval_stages = retrieval.stages or {}
+                state.last_retrieval_timings = retrieval.timings or {}
             candidate_count = len(candidates)
             state.candidate_pool = candidates
             top_ids = sanitize_candidates(candidates, self.catalog, top_k)

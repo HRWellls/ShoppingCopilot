@@ -2,11 +2,15 @@ from __future__ import annotations
 
 from collections import defaultdict
 from dataclasses import dataclass
+from time import perf_counter
 
 from src.catalog.store import CatalogStore
 from src.config import AgentConfig
 from src.errors import AgentError
-from src.models import Candidate, ConstraintSet, FilterReport, RelaxationReport, SessionState
+from src.models import Candidate, ConstraintSet, FilterReport, RelaxationReport, SessionState, StructuredRetrievalRequest
+from src.catalog.normalize import canonical_category
+from src.retrieval.attributes import ExactAttributeIndex
+from src.retrieval.rerank import RouteReranker
 from src.retrieval.bm25 import BM25Index
 from src.retrieval.dense import DenseIndex
 from src.retrieval.filters import HardFilter
@@ -40,6 +44,7 @@ class RouteRetrievalPlan:
     dense_uses_subset: bool
     weights: tuple[float, float]
     diversity: bool = False
+    request: StructuredRetrievalRequest | None = None
 
     def as_dict(self) -> dict[str, object]:
         return {
@@ -48,6 +53,8 @@ class RouteRetrievalPlan:
             "diversity": self.diversity,
             "lexical_query_chars": len(self.lexical_query),
             "dense_query_chars": len(self.dense_query),
+            "hard_filter_count": len(self.request.hard_filters) if self.request else 0,
+            "lexical_field_count": len(self.request.lexical_fields) if self.request else 0,
         }
 
 
@@ -62,10 +69,40 @@ def build_route_plan(state: SessionState, config: AgentConfig) -> RouteRetrieval
     ]
     semantic = [str(slots[name].value) for name in ("occasion", "use_case", "style") if name in slots]
     current = state.last_user_message or state.last_query
+    state_changed = bool(set(state.last_event_kinds) & {"override", "clear", "negation", "intent_switch"})
+    retained_history = state.history[state.retrieval_context_start:]
+    history_context = [current] if state_changed else retained_history[-4:]
+    semantic.extend(message for message in history_context if message and message != current)
+    if config.override_invalidation_enabled:
+        semantic.extend(state.query_evidence[slot] for slot in sorted(state.query_evidence))
+    hard_filters: list[tuple[str, str | float]] = []
+    for name in ("price_min", "price_max", "size", "brand", "color", "material", "category"):
+        value = getattr(active, name)
+        if value is not None:
+            hard_filters.append((name, value))
+    for name, values in sorted(active.exclusions.items()):
+        hard_filters.extend((f"exclude_{name}", value) for value in sorted(values))
+    lexical_values = {
+        "category": (canonical_category(active.category),) if active.category else (),
+        "brand": (str(active.brand),) if active.brand else (),
+        "color": (str(active.color),) if active.color else (),
+        "material": (str(active.material),) if active.material else (),
+        "size": (str(active.size),) if active.size else (),
+        "use_case": tuple(str(slots[name].value) for name in ("use_case",) if name in slots),
+        "style": tuple(str(slots[name].value) for name in ("style",) if name in slots),
+    }
+    request = StructuredRetrievalRequest(
+        route=route,
+        hard_filters=tuple(hard_filters),
+        lexical_fields=tuple((name, values) for name, values in lexical_values.items() if values),
+        semantic_terms=tuple(semantic),
+        residual_query=current,
+        confidence=state.intent_confidence,
+    )
     if route == "buying":
         lexical = " ".join(dict.fromkeys([*structured, current])).strip()
         dense = lexical
-        return RouteRetrievalPlan(route, lexical, dense, active, True, config.buying_weights[:2])
+        return RouteRetrievalPlan(route, lexical, dense, active, True, config.buying_weights[:2], request=request)
     boundary = ConstraintSet(
         price_min=active.price_min,
         price_max=active.price_max,
@@ -74,10 +111,10 @@ def build_route_plan(state: SessionState, config: AgentConfig) -> RouteRetrieval
     if route == "browsing":
         lexical = " ".join(dict.fromkeys([*semantic, active.category or "", current])).strip()
         dense = " ".join(dict.fromkeys([*semantic, current])).strip()
-        return RouteRetrievalPlan(route, lexical, dense, boundary, False, config.browsing_weights[:2], True)
+        return RouteRetrievalPlan(route, lexical, dense, boundary, False, config.browsing_weights[:2], True, request)
     lexical = " ".join(dict.fromkeys([*semantic, active.category or "", current])).strip()
     dense = " ".join(dict.fromkeys([*semantic, current])).strip()
-    return RouteRetrievalPlan("unknown", lexical, dense, active, False, (0.5, 0.5))
+    return RouteRetrievalPlan("unknown", lexical, dense, active, False, (0.5, 0.5), False, request)
 
 
 def fuse_rankings(
@@ -138,6 +175,8 @@ class RetrievalResult:
     relaxation: RelaxationReport
     dense_fallback: str | None = None
     plan: RouteRetrievalPlan | None = None
+    stages: dict[str, tuple[str, ...]] | None = None
+    timings: dict[str, float] | None = None
 
 
 def diversify_candidates(candidates: list[Candidate], catalog: CatalogStore) -> list[Candidate]:
@@ -182,11 +221,16 @@ class HybridRetriever:
         self.bm25 = bm25
         self.hard_filter = hard_filter
         self.dense = dense
+        self.attributes = ExactAttributeIndex(catalog) if config.attribute_retrieval_enabled else None
+        self.reranker = RouteReranker(catalog, config.cache_entries) if config.attribute_reranking_enabled else None
 
     def retrieve(self, state: SessionState) -> RetrievalResult:
+        timings: dict[str, float] = {}
+        started = perf_counter()
         plan = build_route_plan(state, self.config) if self.config.intent_routing_enabled else None
         applied_constraints = plan.filter_constraints if plan is not None else state.constraints
         subset, report = self.hard_filter.apply(applied_constraints)
+        timings["filter_ms"] = (perf_counter() - started) * 1_000
         relaxation = RelaxationReport()
         if not subset and self.config.relaxation_enabled and (plan is None or plan.route == "buying"):
             for index, level in enumerate(("brand", "color_material", "category_synonym"), 1):
@@ -201,7 +245,22 @@ class HybridRetriever:
         lexical_query, dense_query = (
             (plan.lexical_query, plan.dense_query) if plan is not None else build_route_queries(state)
         )
-        lexical = self.bm25.search(lexical_query, self.config.lexical_k, subset) if self.config.lexical_enabled else []
+        stage_started = perf_counter()
+        lexical = (
+            self.bm25.search(lexical_query, self.config.lexical_k, subset)
+            if self.config.lexical_enabled and not self.config.optimized_single_pass_enabled
+            else []
+        )
+        timings["lexical_ms"] = (perf_counter() - stage_started) * 1_000
+        stage_started = perf_counter()
+        structured_lexical = (
+            self.bm25.search_structured(plan.request, self.config.lexical_k, subset)
+            if self.config.lexical_enabled
+            and not self.config.optimized_single_pass_enabled
+            and plan is not None and plan.request is not None and self.config.attribute_retrieval_enabled
+            else []
+        )
+        timings["structured_ms"] = (perf_counter() - stage_started) * 1_000
         lexical = [Candidate(c.parent_asin, c.score, {"lexical": c.score}, {"lexical": i}, ("lexical",)) for i, c in enumerate(lexical, 1)]
         dense_candidates: list[Candidate] = []
         dense_fallback = None
@@ -223,4 +282,47 @@ class HybridRetriever:
         )
         if plan is not None and plan.diversity:
             fused = diversify_candidates(fused, self.catalog)
-        return RetrievalResult(tuple(fused), report, relaxation, dense_fallback, plan)
+        b3_fused = list(fused)
+        attribute_candidates: list[Candidate] = []
+        raw_union: list[Candidate] = list(b3_fused)
+        reranked_all: list[Candidate] = []
+        if self.attributes is not None and plan is not None and plan.request is not None:
+            stage_started = perf_counter()
+            attribute_subset = subset if plan.route == "buying" else None
+            attribute_candidates = self.attributes.search(plan.request, self.config.lexical_k, attribute_subset)
+            timings["attribute_ms"] = (perf_counter() - stage_started) * 1_000
+            ordered_sources = [*b3_fused, *structured_lexical, *attribute_candidates]
+            expanded: list[Candidate] = []
+            existing: set[str] = set()
+            for candidate in ordered_sources:
+                if candidate.parent_asin not in existing:
+                    expanded.append(candidate)
+                    existing.add(candidate.parent_asin)
+            raw_union = expanded
+            if self.reranker is not None:
+                stage_started = perf_counter()
+                reranked_all = self.reranker.rank(
+                    plan.request,
+                    {
+                        "lexical": lexical,
+                        "structured": structured_lexical,
+                        "attribute": attribute_candidates,
+                        "dense": dense_candidates,
+                    },
+                    subset,
+                    len(raw_union),
+                )
+                timings["rerank_ms"] = (perf_counter() - stage_started) * 1_000
+                fused = reranked_all[: self.config.fused_k]
+        stages = {
+            "lexical": tuple(item.parent_asin for item in lexical),
+            "structured_lexical": tuple(item.parent_asin for item in structured_lexical),
+            "dense": tuple(item.parent_asin for item in dense_candidates),
+            "attribute": tuple(item.parent_asin for item in attribute_candidates),
+            "raw_channel_union": tuple(item.parent_asin for item in raw_union),
+            "b3_fused": tuple(item.parent_asin for item in b3_fused),
+            "reranked": tuple(item.parent_asin for item in reranked_all),
+            "fused": tuple(item.parent_asin for item in fused),
+        }
+        timings["total_ms"] = (perf_counter() - started) * 1_000
+        return RetrievalResult(tuple(fused), report, relaxation, dense_fallback, plan, stages, timings)
