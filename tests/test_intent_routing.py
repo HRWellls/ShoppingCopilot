@@ -138,6 +138,50 @@ class IntentRoutingTest(unittest.TestCase):
         buying.consecutive_stable_top10 = self.config.clarification_stability_turns
         self.assertNotEqual(policy.decide(buying, candidates).reason, "stable_top10")
 
+    def test_d3_policy_asks_only_supported_variable_fields_and_stops_after_two(self) -> None:
+        config = AgentConfig(
+            catalog_path=self.catalog_path,
+            fused_k=100,
+            intent_policy_enabled=True,
+            recommendation_with_clarification_enabled=True,
+        )
+        policy = ClarificationPolicy(self.catalog, config)
+        candidates = [Candidate(item.parent_asin, 0.01) for item in self.catalog] * 4
+        state = self.state("browsing")
+
+        first = policy.decide(state, candidates)
+        self.assertEqual(first.action, "clarify")
+        self.assertNotEqual(first.slot, "occasion")
+        self.assertIn(policy.attribute_for(first.slot), {"category", "material", "color", "size", "style", "brand", "budget", "feature", "use_case"})
+        state.last_asked_slot = first.slot
+        state.slot_answers[first.slot] = AskedSlotState(first.slot, 1, "declined", "browsing")
+
+        state.turn_count = 2
+        second = policy.decide(state, candidates)
+        self.assertEqual(state.consecutive_non_improving_clarifications, 1)
+        self.assertEqual(second.action, "clarify")
+        state.last_asked_slot = second.slot
+        state.slot_answers[second.slot] = AskedSlotState(second.slot, 2, "declined", "browsing")
+
+        state.turn_count = 3
+        stopped = policy.decide(state, candidates)
+        self.assertEqual(stopped.reason, "non_improving_clarifications")
+
+    def test_d3_policy_recommends_from_turn_four_and_rejects_no_variation(self) -> None:
+        config = AgentConfig(
+            catalog_path=self.catalog_path,
+            fused_k=100,
+            intent_policy_enabled=True,
+            recommendation_with_clarification_enabled=True,
+        )
+        policy = ClarificationPolicy(self.catalog, config)
+        one_product = [Candidate("SHOE_BLACK_9", 0.01)] * 12
+        state = self.state("browsing")
+        self.assertEqual(policy.decide(state, one_product).reason, "no_supported_information_gain")
+        state.turn_count = 4
+        varied = [Candidate(item.parent_asin, 0.01) for item in self.catalog] * 4
+        self.assertEqual(policy.decide(state, varied).reason, "recommendation_first")
+
     def test_gate_script_rejects_baseline_equal_report(self) -> None:
         baseline = json.loads(Path("docs/baselines/phase3-b0.json").read_text(encoding="utf-8"))
         report = self.root / "report.json"

@@ -19,6 +19,16 @@ class RaisingIndex:
         raise AgentError(ErrorCode.RETRIEVAL, "injected transaction failure")
 
 
+class RaisingParser:
+    def parse(self, message, state):
+        raise RuntimeError("injected parser failure")
+
+
+class RaisingPolicy:
+    def decide(self, state, candidates):
+        raise RuntimeError("injected policy failure")
+
+
 class MultiturnStateTest(unittest.TestCase):
     def setUp(self) -> None:
         self.config = AgentConfig(multiturn_state_enabled=True)
@@ -86,6 +96,61 @@ class MultiturnStateTest(unittest.TestCase):
         self.assertIsNone(self.state.constraints.color)
         self.assertEqual(self.state.constraints.price_max, 100.0)
 
+    def test_additional_feature_preference_is_recorded_as_declined(self) -> None:
+        self.reducer = TurnStateReducer(True)
+        self.state.intent_state = IntentState("browsing", 0.9, "rule", 1)
+        self.state.intent = "browsing"
+        self.state.turn_count = 1
+        self.state.history.append("show options")
+        self.reducer.record_question(self.state, "feature")
+        self.apply(2, "I don't have an additional preference for feature.")
+        self.assertEqual(self.state.slot_answers["feature"].status, "declined")
+        self.assertNotIn("feature", self.state.query_evidence)
+
+    def test_d4_negation_and_route_switch_invalidate_only_affected_state(self) -> None:
+        self.reducer = TurnStateReducer(True)
+        self.apply(1, "looking for casual red shoes under $100")
+        self.state.last_top10_fingerprint = ("old",)
+        self.state.previous_candidate_count = 150
+        self.state.consecutive_non_improving_clarifications = 2
+        self.state.last_route_plan = {"route": "buying"}
+        self.apply(2, "anything except red")
+        self.assertIsNone(self.state.constraints.color)
+        self.assertIn("red", self.state.constraints.exclusions["color"])
+        self.assertEqual(self.state.constraints.price_max, 100.0)
+        self.assertEqual(self.state.last_top10_fingerprint, ())
+        self.assertIsNone(self.state.previous_candidate_count)
+        self.assertEqual(self.state.consecutive_non_improving_clarifications, 0)
+        self.assertEqual(dict(self.state.last_route_plan), {})
+
+        self.apply(3, "I am just exploring options now")
+        self.assertNotIn("style", self.state.active_slots())
+        self.assertEqual(self.state.constraints.price_max, 100.0)
+        self.assertEqual(self.state.retrieval_context_start, 2)
+        self.apply(4, "ignore my earlier preference")
+        self.assertEqual(self.state.constraints.category, "shoes")
+        self.assertEqual(self.state.constraints.price_max, 100.0)
+
+    def test_d4_retains_answer_evidence_unrelated_to_override(self) -> None:
+        self.reducer = TurnStateReducer(True)
+        self.apply(1, "looking for shoes")
+        self.reducer.record_question(self.state, "feature")
+        self.apply(2, "water resistant with a three year battery")
+        self.assertIn("water resistant", self.state.query_evidence["feature"])
+        self.reducer.record_question(self.state, "material")
+        self.apply(3, "actually leather instead")
+        self.assertIn("feature", self.state.query_evidence)
+        self.assertNotIn("material", self.state.query_evidence)
+
+    def test_d4_retains_affected_evidence_when_replacement_agrees(self) -> None:
+        self.reducer = TurnStateReducer(True)
+        self.apply(1, "looking for shirts")
+        self.reducer.record_question(self.state, "material")
+        self.apply(2, "90% cotton and 10% rayon")
+        self.reducer.record_question(self.state, "color")
+        self.apply(3, "actually cotton instead")
+        self.assertIn("90% cotton", self.state.query_evidence["material"])
+
     def test_explicit_switch_beats_strong_rule_and_weak_input_is_stable(self) -> None:
         self.apply(1, "looking for black shoes")
         self.assertEqual(self.state.intent_state.label, "buying")
@@ -121,6 +186,32 @@ class MultiturnStateTest(unittest.TestCase):
             self.assertEqual(after.turn_count, 1)
             self.assertEqual(after.history, ["looking for black running shoes"])
             self.assertEqual(second["recommendations"], first["recommendations"])
+
+    def test_d4_override_failures_roll_back_parser_retrieval_and_policy(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            catalog = write_catalog(Path(directory) / "catalog.jsonl")
+            for component in ("parser", "retrieval", "policy"):
+                agent = Agent(config=AgentConfig(
+                    catalog_path=catalog,
+                    multiturn_state_enabled=True,
+                    override_invalidation_enabled=True,
+                ))
+                session_id = f"rollback-{component}"
+                agent.reset(session_id, profile())
+                first = agent.respond(session_id, "looking for black running shoes", 1, 10)
+                before = agent._core.sessions.get(session_id)
+                if component == "parser":
+                    agent._core.parser = RaisingParser()
+                elif component == "retrieval":
+                    agent._core.index = RaisingIndex()  # type: ignore[assignment]
+                else:
+                    agent._core.policy = RaisingPolicy()
+                response = agent.respond(session_id, "actually white instead", 2, 10)
+                after = agent._core.sessions.get(session_id)
+                self.assertIs(after, before)
+                self.assertEqual(after.turn_count, 1)
+                self.assertEqual(after.constraints.color, "black")
+                self.assertEqual(response["recommendations"], first["recommendations"])
 
     def test_sessions_and_invalid_turns_are_isolated(self) -> None:
         self.store.reset("other", profile("durable"))

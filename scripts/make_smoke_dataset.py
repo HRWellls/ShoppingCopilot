@@ -11,12 +11,15 @@ def main() -> None:
     parser.add_argument("--source", default="data/public_set.jsonl")
     parser.add_argument("--output", default=".runtime/public_smoke.jsonl")
     parser.add_argument("--per-scenario", type=int, default=2)
+    parser.add_argument("--scenario", choices=("boundary", "browsing", "buying", "intent_override"))
     args = parser.parse_args()
     selected, counts = [], defaultdict(int)
     with Path(args.source).open(encoding="utf-8") as handle:
         for line in handle:
             row = json.loads(line)
             scenario = str(row["scenario_type"])
+            if args.scenario and scenario != args.scenario:
+                continue
             if counts[scenario] >= args.per_scenario:
                 continue
             selected.append(row); counts[scenario] += 1

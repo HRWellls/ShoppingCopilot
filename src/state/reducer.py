@@ -1,11 +1,15 @@
 from __future__ import annotations
 
+from src.catalog.normalize import normalize_key
 from src.models import AskedSlotState, IntentState, ParsedTurn, SessionState, SlotChange, SlotKind, SlotValue
 from src.nlu.intent.schema import ResolvedIntent, TurnEvent
 from src.state.overrides import ALLOWED_SLOTS, slot_priority
 
 
 class TurnStateReducer:
+    def __init__(self, override_invalidation_enabled: bool = False) -> None:
+        self.override_invalidation_enabled = override_invalidation_enabled
+
     def reduce(
         self,
         state: SessionState,
@@ -16,13 +20,30 @@ class TurnStateReducer:
         changes: list[SlotChange] = []
         protected = {"price_min", "price_max", "size"}
 
+        destructive = {event.kind for event in events} & {"override", "clear", "negation", "intent_switch"}
+        declined = any(event.kind == "no_preference" for event in events)
+        if (
+            self.override_invalidation_enabled
+            and state.last_asked_slot
+            and not declined
+            and not destructive
+            and state.last_user_message.strip()
+        ):
+            state.query_evidence[state.last_asked_slot] = state.last_user_message
+
         clear_slots: set[str] = set()
         for event in events:
             if event.kind in {"clear", "no_preference"}:
                 if event.slots:
                     clear_slots.update(event.slots)
                 elif not event.explicit:
-                    recent = self._recent_soft_slot(state)
+                    recent = (
+                        state.last_asked_slot
+                        if self.override_invalidation_enabled and state.last_asked_slot in state.slots
+                        else None
+                    )
+                    if not self.override_invalidation_enabled:
+                        recent = self._recent_soft_slot(state)
                     if recent:
                         clear_slots.add(recent)
         for name in clear_slots:
@@ -58,7 +79,21 @@ class TurnStateReducer:
                 current = set(exclusions.get(name, frozenset()))
                 current.update(value.casefold() for value in event.evidence if value)
                 exclusions[name] = frozenset(current)
+                old = state.slots.get(name)
+                if (
+                    self.override_invalidation_enabled
+                    and old is not None
+                    and str(old.value).casefold() in current
+                ):
+                    state.slots.pop(name, None)
+                    changes.append(SlotChange(name, old.value, None, state.turn_count, "negation_clear"))
         state.constraints.exclusions = exclusions
+
+        if self.override_invalidation_enabled and any(event.kind == "intent_switch" for event in events):
+            for name in ("occasion", "style", "use_case"):
+                old = state.slots.pop(name, None)
+                if old is not None:
+                    changes.append(SlotChange(name, old.value, None, state.turn_count, "route_context_reset"))
 
         for name, new in parsed.slot_updates.items():
             if name not in ALLOWED_SLOTS:
@@ -83,7 +118,49 @@ class TurnStateReducer:
         state.conflict_reason = self._detect_conflict(state)
         state.last_event_kinds = tuple(event.kind for event in events)
         self._commit_intent(state, resolved)
+        if self.override_invalidation_enabled and set(state.last_event_kinds) & {
+            "override", "clear", "negation", "intent_switch"
+        }:
+            self._invalidate_derived_state(state, changes, events)
         return changes
+
+    @staticmethod
+    def _invalidate_derived_state(
+        state: SessionState,
+        changes: list[SlotChange],
+        events: tuple[TurnEvent, ...],
+    ) -> None:
+        affected = {change.name for change in changes}
+        affected.update(slot for event in events for slot in event.slots)
+        route_switched = any(event.kind == "intent_switch" for event in events)
+        for slot, answer in list(state.slot_answers.items()):
+            if slot in affected or (route_switched and answer.route != state.intent):
+                state.slot_answers.pop(slot, None)
+        for slot in list(state.query_evidence):
+            active = state.slots.get(slot)
+            evidence = normalize_key(state.query_evidence[slot])
+            active_is_supported = active is not None and normalize_key(active.value) in evidence
+            if (
+                (slot in affected and not active_is_supported)
+                or (route_switched and slot in {"occasion", "style", "use_case"})
+            ):
+                state.query_evidence.pop(slot, None)
+        if state.last_asked_slot not in state.slot_answers:
+            state.last_asked_slot = None
+        state.asked_slots = set(state.slot_answers)
+        state.last_top10_fingerprint = ()
+        state.previous_candidate_count = None
+        state.consecutive_no_shrink = 0
+        state.consecutive_stable_top10 = 0
+        state.consecutive_non_improving_clarifications = 0
+        state.last_evaluated_question_turn = None
+        state.last_question_candidate_count = None
+        state.last_question_top10_fingerprint = ()
+        state.last_route_plan = {}
+        state.last_retrieval_stages = {}
+        state.candidate_ids = []
+        state.candidate_pool = []
+        state.retrieval_context_start = max(0, len(state.history) - 1)
 
     @staticmethod
     def record_question(state: SessionState, slot: str) -> None:

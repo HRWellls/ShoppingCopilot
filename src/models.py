@@ -182,6 +182,28 @@ class Candidate:
 
 
 @dataclass(frozen=True)
+class StructuredRetrievalRequest:
+    route: str
+    hard_filters: tuple[tuple[str, str | float], ...]
+    lexical_fields: tuple[tuple[str, tuple[str, ...]], ...]
+    semantic_terms: tuple[str, ...]
+    residual_query: str
+    confidence: float
+
+    def __post_init__(self) -> None:
+        if self.route not in STABLE_INTENTS:
+            raise ValueError("unsupported retrieval route")
+        if not 0.0 <= self.confidence <= 1.0:
+            raise ValueError("retrieval confidence must be between 0 and 1")
+        lexical_names = {name for name, _ in self.lexical_fields}
+        if lexical_names & {"price_min", "price_max", "exclusions"}:
+            raise ValueError("boundary constraints cannot be lexical-only")
+
+    def field_terms(self) -> dict[str, tuple[str, ...]]:
+        return dict(self.lexical_fields)
+
+
+@dataclass(frozen=True)
 class FilterStep:
     name: str
     before: int
@@ -256,11 +278,17 @@ class SessionState:
     previous_user_message: str | None = None
     last_event_kinds: tuple[str, ...] = ()
     last_route_plan: Mapping[str, Any] = field(default_factory=immutable_mapping)
+    last_retrieval_stages: Mapping[str, tuple[str, ...]] = field(default_factory=immutable_mapping)
+    last_retrieval_timings: Mapping[str, float] = field(default_factory=immutable_mapping)
     last_policy_reason: str | None = None
     last_top10_fingerprint: tuple[str, ...] = ()
     previous_candidate_count: int | None = None
     consecutive_no_shrink: int = 0
     consecutive_stable_top10: int = 0
+    consecutive_non_improving_clarifications: int = 0
+    last_evaluated_question_turn: int | None = None
+    last_question_candidate_count: int | None = None
+    last_question_top10_fingerprint: tuple[str, ...] = ()
     rule_intent: str = "unknown"
     rule_confidence: float = 0.0
     model_intent: str | None = None
@@ -269,6 +297,8 @@ class SessionState:
     intent_fallback_reason: str | None = None
     intent_latency_ms: float = 0.0
     stable_intent_before: str = "unknown"
+    retrieval_context_start: int = 0
+    query_evidence: dict[str, str] = field(default_factory=dict)
 
     def active_slots(self, turn: int | None = None) -> dict[str, SlotValue]:
         current_turn = self.turn_count if turn is None else turn

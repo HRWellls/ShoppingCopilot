@@ -20,7 +20,10 @@ CATEGORY_PHRASES = (
     "running shoes", "winter boots", "casual shirts", "formal dress", "hoop earrings",
     "shoes", "shoe", "boots", "boot", "shirts", "shirt", "dresses", "dress",
     "jackets", "jacket", "pants", "jeans", "earrings", "rings", "ring", "watches",
-    "watch", "bags", "bag", "sneakers", "sneaker", "sandals", "sandal", "jewelry",
+    "watch", "panties", "underwear", "undershirts", "socks", "loafers", "bags", "bag",
+    "sneakers", "sneaker", "sandals", "sandal", "jewelry",
+    "wrist watches", "camisoles", "camisole", "camis", "tanks", "tops", "tees",
+    "tunics", "shorts", "slippers", "necklaces", "bracelets",
 )
 STYLE_WORDS = ("casual", "formal", "sporty", "classic", "vintage", "minimalist", "elegant", "streetwear", "relaxed")
 USE_CASE_WORDS = ("hiking", "running", "gym", "winter", "outdoor", "work", "travel", "wedding", "party", "office")
@@ -71,6 +74,13 @@ class RuleConstraintExtractor:
         intent = RuleIntentRouter().route(message)
         updates = self.extract(message)
         normalized = normalize_key(message)
+        if (
+            updates.category is not None
+            and state.last_asked_slot
+            and state.last_asked_slot != "category"
+            and not re.search(r"\b(?:looking for|category|type of product)\b", normalized)
+        ):
+            updates.category = None
         self._bind_short_answer(updates, normalized, state)
         clears: set[str] = set()
         overrides: set[str] = set()

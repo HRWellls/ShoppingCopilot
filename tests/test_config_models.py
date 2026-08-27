@@ -5,7 +5,7 @@ import unittest
 from pathlib import Path
 
 from src.config import AgentConfig
-from src.models import ConstraintSet, IntentResult
+from src.models import ConstraintSet, IntentResult, StructuredRetrievalRequest
 
 
 class ConfigAndModelsTest(unittest.TestCase):
@@ -19,6 +19,8 @@ class ConfigAndModelsTest(unittest.TestCase):
             AgentConfig(query_token_limit=0)
         with self.assertRaises(ValueError):
             AgentConfig(cache_entries=0)
+        with self.assertRaises(ValueError):
+            AgentConfig(optimized_single_pass_enabled=True)
 
     def test_constraint_names_and_intent_validation(self) -> None:
         constraints = ConstraintSet(price_max=100.0, color="black")
@@ -26,6 +28,16 @@ class ConfigAndModelsTest(unittest.TestCase):
         self.assertEqual(IntentResult("buying", 0.8).label, "buying")
         with self.assertRaises(ValueError):
             IntentResult("invalid", 0.5)
+
+    def test_structured_retrieval_request_separates_boundaries(self) -> None:
+        request = StructuredRetrievalRequest(
+            "buying", (("price_max", 100.0),), (("category", ("shoes",)),), ("running",), "trail shoes", 0.9
+        )
+        self.assertEqual(request.hard_filters, (("price_max", 100.0),))
+        with self.assertRaises(ValueError):
+            StructuredRetrievalRequest(
+                "buying", (), (("price_max", ("100",)),), (), "shoes", 0.9
+            )
 
     def test_intent_features_are_disabled_and_private_paths_are_hidden(self) -> None:
         config = AgentConfig(

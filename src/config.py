@@ -14,6 +14,11 @@ class AgentConfig:
     retrieval_limit: int = 300
     cache_entries: int = 64
     lexical_enabled: bool = True
+    attribute_retrieval_enabled: bool = False
+    attribute_reranking_enabled: bool = False
+    recommendation_with_clarification_enabled: bool = False
+    override_invalidation_enabled: bool = False
+    optimized_single_pass_enabled: bool = False
     dense_enabled: bool = False
     dense_build_allowed: bool = False
     dense_model_id: str = "sentence-transformers/all-MiniLM-L6-v2"
@@ -98,6 +103,10 @@ class AgentConfig:
                 raise ValueError(f"{name} must be a positive integer")
         if self.max_turns > 10:
             raise ValueError("max_turns must be at most 10")
+        if self.attribute_reranking_enabled and not self.attribute_retrieval_enabled:
+            raise ValueError("attribute reranking requires attribute retrieval")
+        if self.optimized_single_pass_enabled and not self.attribute_reranking_enabled:
+            raise ValueError("single-pass ranking requires attribute reranking")
         if not 100 <= self.fused_k <= 200:
             raise ValueError("fused_k must be between 100 and 200")
         if self.late_turn > self.max_turns:

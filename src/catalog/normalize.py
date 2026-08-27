@@ -19,6 +19,15 @@ COLORS = frozenset(
 MATERIALS = frozenset(
     {"cotton", "polyester", "nylon", "leather", "wool", "spandex", "silk", "rayon", "mesh", "synthetic", "fabric"}
 )
+USE_CASES = frozenset({"hiking", "running", "gym", "winter", "outdoor", "work", "travel", "wedding", "party", "office"})
+STYLES = frozenset({"casual", "formal", "sporty", "classic", "vintage", "minimalist", "elegant", "streetwear", "relaxed"})
+CATEGORY_ALIASES = {
+    "sneaker": "shoes",
+    "sneakers": "shoes",
+    "running shoes": "shoes",
+    "winter boots": "boots",
+    "casual shirts": "shirts",
+}
 
 
 def flatten_text(value: Any) -> list[str]:
@@ -54,6 +63,18 @@ def clean_text(value: Any, max_chars: int | None = None) -> str:
 
 def normalize_key(value: Any) -> str:
     return clean_text(value).casefold()
+
+
+def canonical_category(value: Any) -> str:
+    normalized = normalize_key(value)
+    return CATEGORY_ALIASES.get(normalized, normalized)
+
+
+def price_bucket(value: float | None) -> str | None:
+    if value is None:
+        return None
+    lower = int(value // 25) * 25
+    return f"{lower}-{lower + 24}"
 
 
 def normalize_collection(value: Any) -> tuple[str, ...]:
