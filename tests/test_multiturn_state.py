@@ -126,7 +126,7 @@ class MultiturnStateTest(unittest.TestCase):
         self.apply(3, "I am just exploring options now")
         self.assertNotIn("style", self.state.active_slots())
         self.assertEqual(self.state.constraints.price_max, 100.0)
-        self.assertEqual(self.state.retrieval_context_start, 2)
+        self.assertEqual(self.state.retrieval_context_start, 0)
         self.apply(4, "ignore my earlier preference")
         self.assertEqual(self.state.constraints.category, "shoes")
         self.assertEqual(self.state.constraints.price_max, 100.0)

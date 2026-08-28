@@ -160,7 +160,8 @@ class TurnStateReducer:
         state.last_retrieval_stages = {}
         state.candidate_ids = []
         state.candidate_pool = []
-        state.retrieval_context_start = max(0, len(state.history) - 1)
+        # Keep prior turns available; only affected slot evidence is invalidated.
+        state.retrieval_context_start = min(state.retrieval_context_start, max(0, len(state.history) - 4))
 
     @staticmethod
     def record_question(state: SessionState, slot: str) -> None:

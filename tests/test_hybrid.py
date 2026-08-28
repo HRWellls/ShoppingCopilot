@@ -67,7 +67,7 @@ class HybridTest(unittest.TestCase):
         self.assertIn("looking for basketball clothing", request.semantic_terms)
         self.assertNotIn(("category", "basketball"), request.hard_filters)
 
-    def test_override_turn_drops_prior_history_context(self) -> None:
+    def test_override_turn_preserves_unaffected_history_context(self) -> None:
         state = SessionState(
             "s",
             intent="buying",
@@ -76,7 +76,7 @@ class HybridTest(unittest.TestCase):
             last_event_kinds=("override",),
         )
         request = build_route_plan(state, self.config).request
-        self.assertNotIn("black shoes", request.semantic_terms)
+        self.assertIn("black shoes", request.semantic_terms)
 
     def test_d4_context_start_prevents_old_history_from_returning(self) -> None:
         config = AgentConfig(catalog_path=self.config.catalog_path, override_invalidation_enabled=True)

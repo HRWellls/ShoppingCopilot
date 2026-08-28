@@ -88,15 +88,15 @@ class RouteReranker:
             source_rank_score = sum(
                 SOURCE_WEIGHTS.get(source, 0.5)
                 * (1.8 if request.route == "buying" and source == "attribute" else 1.0)
-                * (1.0 - (rank - 1) / 300.0)
+                * (1.0 / rank if source == "attribute" else 1.0 - (rank - 1) / 300.0)
                 for source, rank in ranks.items()
             )
             contributions["source_rank"] = source_rank_score
             score += source_rank_score
 
             attribute_rank = ranks.get("attribute")
-            if request.route == "buying" and attribute_rank is not None and attribute_rank <= 5:
-                attribute_top_rank = 0.9 * (6 - attribute_rank) / 5
+            if request.route in {"buying", "browsing", "unknown"} and attribute_rank is not None and attribute_rank <= 5:
+                attribute_top_rank = 9.9 / attribute_rank
                 contributions["attribute_top_rank"] = attribute_top_rank
                 score += attribute_top_rank
 
@@ -121,7 +121,8 @@ class RouteReranker:
                     score += contribution
             if exact_total:
                 completeness = exact_matched / exact_total
-                bonus = completeness * (12.0 if request.route == "buying" else 5.0)
+                max_bonus = 12.0 if request.route == "buying" else 5.0
+                bonus = max_bonus * math.log1p(completeness) / math.log(2.0)
                 contributions["field_completeness"] = bonus
                 score += bonus
 
@@ -158,6 +159,31 @@ class RouteReranker:
             )
             scored.append((score, -first_seen[asin], asin, candidate))
 
+        centered_features = {
+            name
+            for _, _, _, candidate in scored
+            for name in candidate.source_scores
+            if name.startswith(("field_", "title_overlap", "category_overlap", "feature_overlap", "context_overlap"))
+            or name == "exact_phrase"
+        }
+        if centered_features:
+            medians: dict[str, float] = {}
+            for name in centered_features:
+                values = sorted(float(candidate.source_scores.get(name, 0.0)) for _, _, _, candidate in scored)
+                middle = len(values) // 2
+                medians[name] = values[middle] if len(values) % 2 else (values[middle - 1] + values[middle]) / 2.0
+            scored = [
+                (
+                    raw_score + sum(
+                        float(candidate.source_scores.get(name, 0.0)) - medians[name]
+                        for name in centered_features
+                    ),
+                    first_seen,
+                    asin,
+                    candidate,
+                )
+                for raw_score, first_seen, asin, candidate in scored
+            ]
         scored.sort(key=lambda item: (-item[0], -item[1], self.catalog.require(item[2]).catalog_order, item[2]))
         candidates = [item[3] for item in scored]
         if request.route == "browsing":

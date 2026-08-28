@@ -33,7 +33,7 @@ class RuleEventDetector:
                 events.append(TurnEvent("no_preference", slots, 0.99, True, ("no_preference",)))
 
         clear_signal = bool(re.search(r"\b(?:clear|remove|forget|ignore)\b", normalized))
-        if clear_signal and not no_preference:
+        if clear_signal and not no_preference and not parsed.overrides:
             if named:
                 events.append(TurnEvent("clear", named, 0.98, True, ("scoped_clear",)))
             else:

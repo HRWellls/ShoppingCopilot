@@ -69,9 +69,8 @@ def build_route_plan(state: SessionState, config: AgentConfig) -> RouteRetrieval
     ]
     semantic = [str(slots[name].value) for name in ("occasion", "use_case", "style") if name in slots]
     current = state.last_user_message or state.last_query
-    state_changed = bool(set(state.last_event_kinds) & {"override", "clear", "negation", "intent_switch"})
     retained_history = state.history[state.retrieval_context_start:]
-    history_context = [current] if state_changed else retained_history[-4:]
+    history_context = retained_history[-4:]
     semantic.extend(message for message in history_context if message and message != current)
     if config.override_invalidation_enabled:
         semantic.extend(state.query_evidence[slot] for slot in sorted(state.query_evidence))
