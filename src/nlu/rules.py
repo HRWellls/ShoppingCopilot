@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable
 
 from src.catalog.normalize import COLORS, MATERIALS, clean_text, normalize_key
 from src.models import ConstraintSet, ParsedTurn, SessionState
@@ -28,8 +29,17 @@ CATEGORY_PHRASES = (
 STYLE_WORDS = ("casual", "formal", "sporty", "classic", "vintage", "minimalist", "elegant", "streetwear", "relaxed")
 # USE_CASE_WORDS = ("hiking", "running", "gym", "winter", "outdoor", "work", "travel", "wedding", "party", "office")
 USE_CASE_WORDS =()
+CATALOG_CATEGORY_TOKEN_RE = re.compile(r"[a-z0-9]+", re.I)
 
 class RuleConstraintExtractor:
+    def __init__(self, category_phrases: Iterable[str] = ()) -> None:
+        phrases = dict.fromkeys((*category_phrases, *CATEGORY_PHRASES))
+        self._category_patterns: tuple[tuple[str, int, int, re.Pattern[str]], ...] = tuple(
+            (phrase, len(parts), priority, re.compile(r"\b" + r"\W+".join(map(re.escape, parts)) + r"\b"))
+            for priority, phrase in enumerate(phrases)
+            if (parts := CATALOG_CATEGORY_TOKEN_RE.findall(normalize_key(phrase)))
+        )
+
     def extract(self, message: str) -> ConstraintSet:
         normalized = normalize_key(message)
         updates = ConstraintSet()
@@ -58,10 +68,13 @@ class RuleConstraintExtractor:
             if re.search(rf"\b{re.escape(material)}\b", normalized):
                 updates.material = material
                 break
-        for category in CATEGORY_PHRASES:
-            if re.search(rf"\b{re.escape(category)}\b", normalized):
-                updates.category = category
-                break
+        category_matches = [
+            (word_count, -priority, category)
+            for category, word_count, priority, pattern in self._category_patterns
+            if pattern.search(normalized) is not None
+        ]
+        if category_matches:
+            updates.category = max(category_matches)[-1]
 
         brand = BRAND_RE.search(clean_text(message))
         if brand:

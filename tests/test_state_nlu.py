@@ -72,6 +72,13 @@ class RuleNluTest(unittest.TestCase):
         underwear = self.extractor.extract("looking for women panties; machine wash with laundry bag")
         self.assertEqual(underwear.category, "panties")
 
+    def test_catalog_taxonomy_prefers_specific_late_leaf(self) -> None:
+        extractor = RuleConstraintExtractor(("Sleep Bottoms", "Dress Shirts", "Westlake", "Women"))
+        self.assertEqual(extractor.extract("looking for Sleep & Lounge Sleep Bottoms").category, "Sleep Bottoms")
+        self.assertEqual(extractor.extract("looking for Shirts Dress Shirts").category, "Dress Shirts")
+        self.assertEqual(extractor.extract("looking for Shoes & Jewelry Westlake").category, "Westlake")
+        self.assertEqual(extractor.extract("looking for Shoes & Jewelry Women").category, "Women")
+
     def test_constraints_accumulate_and_replace_same_field(self) -> None:
         store = SessionStateStore(AgentConfig())
         state = store.reset("A", profile())

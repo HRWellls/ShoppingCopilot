@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import time
+from collections import Counter
 from typing import Any
 
 from src.catalog.store import CatalogStore
@@ -21,6 +22,7 @@ SUCCESS_MESSAGE = "Here are the closest matches I found."
 EMPTY_MESSAGE = "I couldn't find a catalog item that satisfies the current constraints."
 FALLBACK_MESSAGE = "I couldn't process that request safely."
 PREVIOUS_MESSAGE = "I couldn't process that update, so here are the previous matches."
+CATALOG_CATEGORY_MIN_FREQUENCY = 5
 
 
 class ShoppingAgentCore:
@@ -28,7 +30,12 @@ class ShoppingAgentCore:
         self.config = config
         self.catalog = CatalogStore(config)
         self.sessions = SessionStateStore(config)
-        self.extractor = RuleConstraintExtractor()
+        category_counts = Counter(category for product in self.catalog for category in product.categories)
+        # One-off catalog paths are merchandising labels, not stable product taxonomy.
+        self.extractor = RuleConstraintExtractor(
+            category for category, count in sorted(category_counts.items(), key=lambda item: (item[1], item[0]))
+            if count >= CATALOG_CATEGORY_MIN_FREQUENCY
+        )
         model_parser = None
         if config.llm_enabled:
             kwargs = {"opener": llm_opener} if llm_opener is not None else {}
