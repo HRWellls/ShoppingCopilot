@@ -86,11 +86,19 @@ class RouteReranker:
             score = 100.0
 
             source_rank_score = sum(
-                SOURCE_WEIGHTS.get(source, 0.5) * (1.0 - (rank - 1) / 300.0)
+                SOURCE_WEIGHTS.get(source, 0.5)
+                * (1.8 if request.route == "buying" and source == "attribute" else 1.0)
+                * (1.0 - (rank - 1) / 300.0)
                 for source, rank in ranks.items()
             )
             contributions["source_rank"] = source_rank_score
             score += source_rank_score
+
+            attribute_rank = ranks.get("attribute")
+            if request.route == "buying" and attribute_rank is not None and attribute_rank <= 5:
+                attribute_top_rank = 0.9 * (6 - attribute_rank) / 5
+                contributions["attribute_top_rank"] = attribute_top_rank
+                score += attribute_top_rank
 
             exact_total = 0.0
             exact_matched = 0.0
