@@ -72,6 +72,10 @@ class RuleConstraintExtractor:
             (word_count, -priority, category)
             for category, word_count, priority, pattern in self._category_patterns
             if pattern.search(normalized) is not None
+            and not (
+                word_count == 1
+                and normalize_key(category) in MATERIALS | COLORS | frozenset(STYLE_WORDS)
+            )
         ]
         if category_matches:
             updates.category = max(category_matches)[-1]
