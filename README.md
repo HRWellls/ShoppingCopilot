@@ -94,6 +94,24 @@ python3 -m unittest discover -s tests -v
 
 `tests/test_full_catalog_smoke.py` loads all 50,000 products when `data/catalog.jsonl` is present. It is skipped when the release catalog has not been downloaded.
 
+### Developer delivery and visual demo
+
+Run the startup self-check and capture a redacted reproducible baseline:
+
+```bash
+python -m scripts.delivery_self_check --json
+python -m scripts.capture_baseline --output .runtime/baseline.json
+```
+
+Launch the dependency-light conversation demo (sample catalog, offline BM25 fallback):
+
+```bash
+python -m demo.app
+# open http://127.0.0.1:8765
+```
+
+See `开发者交付总结与操作指南.md` for the complete delivery checklist and rollback notes.
+
 ### Evaluation and engineering metrics
 
 Run the unmodified official evaluator and keep its generated result local:
