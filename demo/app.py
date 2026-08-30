@@ -1,6 +1,6 @@
 """Chat-style local demo backed by real public evaluation samples."""
 from __future__ import annotations
-import json, uuid
+import json, os, uuid
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
@@ -8,7 +8,14 @@ from evaluator.local_evaluator import coarse_category, load_jsonl, materialize_h
 from starter.agent import Agent
 
 ROOT = Path(__file__).resolve().parents[1]
-CATALOG = ROOT / "data/catalog.jsonl" if (ROOT / "data/catalog.jsonl").exists() else ROOT / "data/catalog_sample_100.jsonl"
+# Keep the browser demo fast and dependency-light. Set HAMBURGERR_DEMO_CATALOG
+# to an explicit path when a full catalog run is required.
+catalog_override = os.environ.get("HAMBURGERR_DEMO_CATALOG")
+CATALOG = Path(catalog_override) if catalog_override else ROOT / "data/catalog_sample_100.jsonl"
+if not CATALOG.is_absolute():
+    CATALOG = ROOT / CATALOG
+if not CATALOG.exists():
+    CATALOG = ROOT / "data/catalog.jsonl"
 DATASET = ROOT / "data/public_set.jsonl" if (ROOT / "data/public_set.jsonl").exists() else ROOT / "data/public_smoke.jsonl"
 agent = Agent(CATALOG)
 samples = load_jsonl(DATASET)
