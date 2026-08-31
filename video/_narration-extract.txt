@@ -1,0 +1,78 @@
+
+### S01 · Opening
+
+| S01-F01 | 0:00-0:08 | Shopping Copilot is a conversational shopping search agent. It turns a one-off query into a shopping process you can correct. |
+| S01-F02 | 0:08-0:20 | Within ten turns, it converges changing shopping intent into trustworthy product results. |
+| S01-F03 | 0:20-0:30 | The hard part is not finding more products. It is that users keep adding, revising, and contradicting what they asked for. |
+
+### S02 · Product loop
+
+| S02-F01 | 0:30-0:38 | Traditional search treats every request as a static query, so an old condition can quietly outlive its welcome. |
+| S02-F02 | 0:38-0:46 | We treat intent as a changing state and put the difference in one state-driven framework. |
+| S02-F03 | 0:46-0:54 | Buying protects your hard constraints. Browsing protects your options. Both run on the same state. |
+| S02-F04 | 0:54-1:02 | Three mechanisms do the work: slot-level update, a question that earns its turn, and controlled relaxation. |
+| S02-F05 | 1:02-1:11 | Route it, update the valid slots, retrieve, verify, then recommend, clarify, or relax, and keep the trace. |
+| S02-F06 | 1:11-1:20 | These are not patches for the hard cases. They run across every scenario, including the easy eighty percent. |
+
+### S03 · Buying + Override
+
+| S03-T01-P01 | 1:20-1:25 | Maya asks for black running shoes under one hundred dollars. |
+| S03-T01-P02 | 1:25-1:30 | The system reads that as Buying and writes three hard constraints. |
+| S03-T01-P03 | 1:30-1:35 | Category, colour, and budget become conditions every result must satisfy. |
+| S03-T01-P04 | 1:35-1:40 | It filters first, retrieves and ranks, then verifies before anything is shown. |
+| S03-T01-P05 | 1:40-1:45 | Only results that clear every hard constraint reach her. |
+| S03-T02-P01 | 1:45-1:50 | Then she adds one condition: Nike only. |
+| S03-T02-P02 | 1:50-1:55 | Brand joins the state. Nothing else is touched. |
+| S03-T02-P03 | 1:55-2:00 | She keeps every constraint she already gave. |
+| S03-T02-P04 | 2:00-2:05 | The tighter state triggers a fresh retrieval. |
+| S03-T02-P05 | 2:05-2:10 | Now only legal Nike candidates come back. |
+| S03-T03-P01 | 2:10-2:15 | Then she changes her mind: any brand is fine. |
+| S03-T03-P02 | 2:15-2:20 | The system catches the no-preference signal on brand. |
+| S03-T03-P03 | 2:20-2:25 | It clears brand only. Category, colour, and budget survive. |
+| S03-T03-P04 | 2:25-2:30 | Stale results are dropped, and retrieval runs again. |
+| S03-T03-P05 | 2:30-2:35 | One condition changed. She did not have to say the rest again. |
+
+### S04 · Browsing
+
+| S04-T01-P01 | 2:35-2:38 | Maya explores summer outdoor training instead. |
+| S04-T01-P02 | 2:38-2:41 | Scene language routes this to Browsing. |
+| S04-T01-P03 | 2:41-2:45 | The occasion is kept as context, not a hard filter. |
+| S04-T01-P04 | 2:45-2:48 | It retrieves, ranks, and diversifies. |
+| S04-T01-P05 | 2:48-2:52 | Tops, shorts, and breathable layers all stay in play. |
+| S04-T02-P01 | 2:52-2:55 | She asks for lighter, less fitted options. |
+| S04-T02-P02 | 2:55-2:59 | The route stays Browsing. |
+| S04-T02-P03 | 2:59-3:02 | Style updates. The occasion stays put. |
+| S04-T02-P04 | 3:02-3:06 | Soft preferences reweight the ranking without excluding anything. |
+| S04-T02-P05 | 3:06-3:10 | The direction changes. She can still explore before narrowing. |
+
+### S05A · Clarification
+
+| S05A-T01-P01 | 3:10-3:13 | Maya starts with a broad request. |
+| S05A-T01-P02 | 3:13-3:16 | The system reads it as Buying. |
+| S05A-T01-P03 | 3:16-3:18 | The category is too broad. |
+| S05A-T01-P04 | 3:18-3:20 | It scores the useful gaps. |
+| S05A-T01-P05 | 3:20-3:23 | So it asks one useful question. |
+| S05A-T02-P01 | 3:23-3:25 | She answers: running shoes. |
+| S05A-T02-P02 | 3:25-3:27 | The route holds. |
+| S05A-T02-P03 | 3:27-3:30 | Category narrows from broad to specific. |
+| S05A-T02-P04 | 3:30-3:32 | Retrieval resumes. |
+| S05A-T02-P05 | 3:32-3:35 | One question, real convergence. |
+
+### S05B · Boundary
+
+| S05B-T01-P01 | 3:35-3:39 | Maya asks for Nike shoes under five dollars. |
+| S05B-T01-P02 | 3:39-3:43 | The system reads this as Buying. |
+| S05B-T01-P03 | 3:43-3:47 | Budget is locked. Brand can give way. |
+| S05B-T01-P04 | 3:47-3:51 | Nothing matches, so it relaxes brand and holds the budget. |
+| S05B-T01-P05 | 3:51-3:55 | No legal match exists, so it explains rather than cheats. |
+
+### S06 · Evidence
+
+| S06-F01 | 3:55-4:12 | On the latest 200-session public set, HitRate at ten is 0.9600, MRR is 0.606629, mean first-hit turn is 2.585, and the composite score is 0.830289. |
+| S06-F02 | 4:12-4:25 | On the same catalog, HitRate is 0.880 on 100 self-built sessions and 0.854 on 500. These test transfer, not headline. |
+| S06-F03 | 4:25-4:35 | The public run recorded zero fallbacks, p95 at 48.044 milliseconds, and no external model calls. |
+
+### S07 · Value and roadmap
+
+| S07-F01 | 4:35-4:47 | For shoppers: less repetition, local correction, results you can trust, and no quietly broken constraints. |
+| S07-F02 | 4:47-4:55 | For a platform these are hypotheses worth testing: efficiency, conversion, fewer hand-offs. The roadmap starts with a live catalog. |

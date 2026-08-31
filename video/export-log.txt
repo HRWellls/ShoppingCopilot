@@ -1,0 +1,1 @@
+﻿[safe-delete][SAFE_DELETE_FAIL_CLOSED] {"target":"C:\\Users\\LEYI\\Desktop\\Hamburgerr\\video\\.asset-staging","reason":"trash-failed","detail":"使用“3”个参数调用“DeleteDirectory”时发生异常:“无法找到指定文件。”"}
