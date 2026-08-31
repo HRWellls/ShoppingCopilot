@@ -2,12 +2,12 @@
 
 **导出日期**：2026-09-01
 **来源**：`C:\Users\LEYI\Desktop\Hamburgerr\video\index.html` 的 frame manifest
-**帧数**：54 帧 · 总时长 295 秒（4:55）
+**画面数**：54 个工作台帧 + 1 个开发编辑器实录插段 · 暂定总时长 298 秒（4:58）
 **语速**：1.00 至 2.50 词/秒
 
 > Per-frame narration (Chinese and English)
 > Exported 2026-09-01 from the frame manifest in `C:\Users\LEYI\Desktop\Hamburgerr\video\index.html`
-> 54 frames, 295 seconds total (4:55), narrated at 1.00 to 2.50 words per second
+> 54 workbench frames plus one live development-editor insert, 298 seconds total (4:58, provisional), narrated at 1.00 to 2.50 words per second
 
 ---
 
@@ -90,25 +90,39 @@
 | S05B-T01-P04 | 3:47-3:51 | Nothing matches, so it relaxes brand and holds the budget. | 没有匹配结果，于是它放宽品牌，同时守住预算。 |
 | S05B-T01-P05 | 3:51-3:55 | No legal match exists, so it explains rather than cheats. | 确实没有合规结果，所以它选择解释，而不是糊弄。 |
 
-## S06 · Evidence · 3:55-4:35
+## S05C · Live evaluation insert · 3:55-4:05
+
+> 此段不是 `video/index.html` 中的新帧，而是后期插入的真实开发编辑器录屏。具体入口、命令和指标在项目结构冻结后填写。
+
+> This is not a new frame in `video/index.html`; it is a genuine development-editor recording inserted in the edit. Fill in the exact entry point, command and metrics only after the project structure is frozen.
+
+| Shot | 时间 | English voiceover | 中文对照 |
+|---|---|---|---|
+| S05C-LIVE-01 | 3:55-4:05 | Now we leave the demo and run the evaluator from the project itself. The evidence that follows comes from this reproducible execution. | 现在我们离开 Demo 界面，直接从项目中运行评测器。接下来的证据，来自这次可复现的真实执行。 |
+
+**画面操作**：Boundary 结果结束后硬切到开发编辑器；展示 `[待定：最终评测入口]`，在内置终端运行 `[待定：最终可复现评测命令]`；剪掉纯等待时间并标注 `Evaluation completed · idle wait removed`；真实输出出现后停留，再切回 `S06-F01`。
+
+> **Screen direction**: hard-cut to the development editor after the Boundary result; show `[TBD: final evaluation entry point]`, run `[TBD: final reproducible evaluation command]` in the integrated terminal, remove idle waiting and label the edit `Evaluation completed · idle wait removed`, hold on the genuine output, then return to `S06-F01`.
+
+## S06 · Evidence · 4:05-4:36
 
 | Frame | 时间 | English voiceover | 中文对照 |
 |---|---|---|---|
-| S06-F01 | 3:55-4:12 | On the latest 200-session public set, HitRate at ten is 0.9600, MRR is 0.606629, mean first-hit turn is 2.585, and the composite score is 0.830289. | 在最新的 200 个公开会话上，HitRate@10 是 0.9600，MRR 是 0.606629，平均首次命中轮次是 2.585，综合分是 0.830289。 |
-| S06-F02 | 4:12-4:25 | On the same catalog, HitRate is 0.880 on 100 self-built sessions and 0.854 on 500. These test transfer, not headline. | 在同一个商品目录上，100 个自建会话的 HitRate 是 0.880，500 个是 0.854。这些检验的是迁移性，不是 headline 成绩。 |
-| S06-F03 | 4:25-4:35 | The public run recorded zero fallbacks, p95 at 48.044 milliseconds, and no external model calls. | 公开这次运行记录了零次 fallback，p95 是 48.044 毫秒，并且没有外部模型调用。 |
+| S06-F01 | 4:05-4:18 | On the latest 200-session public set, HitRate at ten is 0.9600, MRR is 0.606629, mean first-hit turn is 2.585, and the composite score is 0.830289. | 在最新的 200 个公开会话上，HitRate@10 是 0.9600，MRR 是 0.606629，平均首次命中轮次是 2.585，综合分是 0.830289。 |
+| S06-F02 | 4:18-4:28 | On the same catalog, HitRate is 0.880 on 100 self-built sessions and 0.854 on 500. These test transfer, not headline. | 在同一个商品目录上，100 个自建会话的 HitRate 是 0.880，500 个是 0.854。这些检验的是迁移性，不是 headline 成绩。 |
+| S06-F03 | 4:28-4:36 | The public run recorded zero fallbacks, p95 at 48.044 milliseconds, and no external model calls. | 公开这次运行记录了零次 fallback，p95 是 48.044 毫秒，并且没有外部模型调用。 |
 
-## S07 · Value and roadmap · 4:35-4:55
+## S07 · Value and roadmap · 4:36-4:58
 
 | Frame | 时间 | English voiceover | 中文对照 |
 |---|---|---|---|
-| S07-F01 | 4:35-4:47 | For shoppers: less repetition, local correction, results you can trust, and no quietly broken constraints. | 对购物者来说：少重复、可局部修正、结果可信，以及没有悄悄被改掉的条件。 |
-| S07-F02 | 4:47-4:55 | For a platform these are hypotheses worth testing: efficiency, conversion, fewer hand-offs. The roadmap starts with a live catalog. | 对平台来说，这些是值得验证的假设：搜索效率、转化机会、更少的转接。路线图从接入动态商品库开始。 |
+| S07-F01 | 4:36-4:48 | For shoppers: less repetition, local correction, results you can trust, and no quietly broken constraints. | 对购物者来说：少重复、可局部修正、结果可信，以及没有悄悄被改掉的条件。 |
+| S07-F02 | 4:48-4:58 | For a platform these are hypotheses worth testing: efficiency, conversion, fewer hand-offs. The roadmap starts with a live catalog. | 对平台来说，这些是值得验证的假设：搜索效率、转化机会、更少的转接。路线图从接入动态商品库开始。 |
 
 ---
 
 ## 说明
 
-旁白为逐字稿，录制时按帧切换。画面另外承载三项内容，不需要念出：每个场景的"Why it matters"价值点、每个场景的指标 trace、以及底部的配置信息。
+旁白为逐字稿，录制时按帧切换。`S05C-LIVE-01` 是唯一不属于工作台 frame manifest 的实录插段。画面另外承载三项内容，不需要念出：每个场景的"Why it matters"价值点、每个场景的指标 trace、以及底部的配置信息。项目结构冻结后，必须用真实评测入口、命令和输出替换本文件中的全部 `[待定]`，并同步更新 S06 的数字与时间。
 
-> The narration is verbatim and advances frame by frame. Three things live on screen and are not read aloud: the "Why it matters" value line for each scenario, the metric trace for each scenario, and the configuration note at the bottom.
+> The narration is verbatim and advances frame by frame. `S05C-LIVE-01` is the only live insert outside the workbench frame manifest. Three things live on screen and are not read aloud: the "Why it matters" value line for each scenario, the metric trace for each scenario, and the configuration note at the bottom. After the project structure is frozen, replace every `[TBD]` in this file with the genuine evaluation entry point, command and output, then synchronize the S06 numbers and timing.

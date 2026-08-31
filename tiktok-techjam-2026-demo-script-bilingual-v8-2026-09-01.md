@@ -1,26 +1,26 @@
 # TikTok TechJam 2026 Shopping Copilot Demo 脚本（v8）
 
 **日期**：2026-09-01
-**版本说明**：本版按录制工作台的实际画面重写。段落 2 补齐了原本缺失的技术架构叙事（双轨、三项机制、六步闭环、能力覆盖）；全部旁白按 54 帧逐帧重排；技术说明按 `src/` 真实代码复核后修正。
+**版本说明**：本版按录制工作台的实际画面重写。段落 2 补齐了原本缺失的技术架构叙事（双轨、三项机制、六步闭环、能力覆盖）；全部旁白按 54 帧逐帧重排；技术说明按 `src/` 真实代码复核后修正；并在 Boundary 与 Evidence 之间预留一段开发编辑器实录，用于运行最终冻结版本的评测代码。
 
 > Shopping Copilot demo script, v8
-> Date: 2026-09-01. This version is rewritten against the actual screens of the recording workbench. Section 2 adds the technical architecture narrative that was missing (two tracks, three mechanisms, the six-step loop, capability coverage). All narration is re-laid out across 54 frames. Technical notes are corrected against the real code in `src/`.
+> Date: 2026-09-01. This version is rewritten against the actual screens of the recording workbench. Section 2 adds the technical architecture narrative that was missing (two tracks, three mechanisms, the six-step loop, capability coverage). All narration is re-laid out across 54 frames. Technical notes are corrected against the real code in `src/`. A live editor insert is reserved between Boundary and Evidence to run the evaluator from the final frozen project structure.
 
 ---
 
 ## TL;DR
 
 - **产品结论**：Shopping Copilot 把一次性关键词搜索变成可修正的购物决策过程，在最多十轮内持续维护用户当前有效意图。
-- **叙事主线**：Problem → Pain → Need → Insight → Solution → Demo → Evidence → Value，保留 Buying、Intent Override、Browsing、澄清和 Boundary 五个连续展示节点。
+- **叙事主线**：Problem → Pain → Need → Insight → Solution → Demo → Reproduction → Evidence → Value，保留 Buying、Intent Override、Browsing、澄清和 Boundary 五个连续展示节点，并用一次真实代码运行把产品演示连接到量化证据。
 - **技术重点**：Buying/Browsing 双轨是题目要求；真正的竞争力是槽位级状态更新、信息增益澄清和受控放宽的组合，以及可回放、可解释、可复现。
 - **架构段新增内容**：双轨共享同一套状态、三项机制作用于同一状态、六步产品闭环、能力贯穿全部场景而不只是困难样本。
-- **录制目标**：英文正式成片 4:55，硬上限 5:00。技术说明用于屏幕展示和答辩，不逐字朗读。
+- **录制目标**：英文正式成片约 4:58，硬上限 5:00。54 个工作台帧之外增加一个约 10 秒的开发编辑器实录插段；技术说明用于屏幕展示和答辩，不逐字朗读。
 
 > - **Product claim**: Shopping Copilot turns a one-off keyword search into a shopping decision process you can correct, maintaining the user's current valid intent within ten turns.
-> - **Narrative spine**: Problem → Pain → Need → Insight → Solution → Demo → Evidence → Value, keeping Buying, Intent Override, Browsing, clarification and Boundary as five continuous beats.
+> - **Narrative spine**: Problem → Pain → Need → Insight → Solution → Demo → Reproduction → Evidence → Value, keeping Buying, Intent Override, Browsing, clarification and Boundary as five continuous beats and connecting the product demo to quantitative evidence with a real code run.
 > - **Technical focus**: the Buying/Browsing tracks are a challenge requirement; the real edge is the combination of slot-level state update, information-gain clarification and controlled relaxation, plus replayable, explainable, reproducible behaviour.
 > - **New in the architecture section**: two tracks sharing one state, three mechanisms acting on that state, the six-step product loop, and capability spanning every scenario rather than only the hard cases.
-> - **Recording target**: 4:55 in English, hard ceiling 5:00. Technical notes are for screen and Q&A, not read aloud.
+> - **Recording target**: approximately 4:58 in English, with a hard ceiling of 5:00. One roughly ten-second live editor insert sits outside the 54 workbench frames. Technical notes are for screen and Q&A, not read aloud.
 
 ---
 
@@ -115,8 +115,9 @@
 | 4 Browsing | 2:35-3:10 | 10 | 两轮输入，场合保留，软偏好更新 |
 | 5A Clarification | 3:10-3:35 | 10 | 一问一答，信息增益 |
 | 5B Boundary | 3:35-3:55 | 5 | 空集、受控放宽、受限响应 |
-| 6 Evidence | 3:55-4:35 | 3 | 质量、泛化、可靠性 |
-| 7 Value and roadmap | 4:35-4:55 | 2 | 用户价值、平台假设、路线图 |
+| 5C Live evaluation | 3:55-4:05 | 1 个实录插段 | 从 Demo 界面切到开发编辑器，运行最终评测入口并显示真实输出 |
+| 6 Evidence | 4:05-4:36 | 3 | 质量、泛化、可靠性 |
+| 7 Value and roadmap | 4:36-4:58 | 2 | 用户价值、平台假设、路线图 |
 
 | Section | Time | Frames | Content |
 |---|---|---:|---|
@@ -126,8 +127,9 @@
 | 4 Browsing | 2:35-3:10 | 10 | Two turns, occasion retained, soft preferences updated |
 | 5A Clarification | 3:10-3:35 | 10 | One question, one answer, information gain |
 | 5B Boundary | 3:35-3:55 | 5 | Empty set, controlled relaxation, constrained response |
-| 6 Evidence | 3:55-4:35 | 3 | Quality, generalization, reliability |
-| 7 Value and roadmap | 4:35-4:55 | 2 | User value, platform hypotheses, roadmap |
+| 5C Live evaluation | 3:55-4:05 | 1 live insert | Cut from the demo to the development editor, run the final evaluation entry point, and reveal its real output |
+| 6 Evidence | 4:05-4:36 | 3 | Quality, generalization, reliability |
+| 7 Value and roadmap | 4:36-4:58 | 2 | User value, platform hypotheses, roadmap |
 
 ---
 
@@ -319,6 +321,32 @@
 >
 > No legal match exists, so it explains rather than cheats.
 
+### Segment 5C · Live evaluation insert
+
+> Now we leave the demo and run the evaluator from the project itself. The evidence that follows comes from this reproducible execution.
+
+**切屏位置**：`S05B-T01-P05` 的 Boundary 响应停留结束后，在 `3:55` 从 Demo 全屏硬切到开发编辑器。不要在 Buying、Browsing 或 Boundary 流程中途切走，否则会打断 Maya 的连续购物旅程。
+
+> **Cut point**: after the `S05B-T01-P05` Boundary response has finished, hard-cut from the full-screen demo to the development editor at `3:55`. Do not leave the demo during Buying, Browsing or Boundary; that would interrupt Maya's continuous shopping journey.
+
+**预留镜头（约 10 秒，最终项目结构冻结后再填具体内容）**：
+
+1. `3:55-3:58`：开发编辑器已经打开最终评测入口附近的代码，只展示与 Agent 调用、数据集加载和指标汇总直接相关的区域。
+2. `3:58-4:00`：焦点移到编辑器内置终端，输入并执行 `[待定：最终可复现评测命令]`。
+3. `4:00-4:05`：剪掉纯等待时间后显示真实完成输出，停留在 `[待定：最终指标摘要]`；画面角落标注 `Evaluation completed · idle wait removed`，避免把跳剪误解为即时运行。
+4. `4:05`：从终端输出切回 Demo 工作台的 `S06-F01`，开始解释与刚才输出一致的 Evidence。
+
+> **Reserved shot, about ten seconds; fill the specifics only after the final project structure is frozen**:
+>
+> 1. `3:55-3:58`: the development editor is already positioned near the final evaluation entry point, showing only the code directly related to Agent invocation, dataset loading and metric aggregation.
+> 2. `3:58-4:00`: move focus to the integrated terminal and run `[TBD: final reproducible evaluation command]`.
+> 3. `4:00-4:05`: remove idle waiting in the edit, then reveal the genuine completed output and hold on `[TBD: final metric summary]`. Add `Evaluation completed · idle wait removed` in a corner so the jump cut is not mistaken for an instant run.
+> 4. At `4:05`, cut from the terminal back to `S06-F01` in the demo workbench and explain the Evidence that matches the output just shown.
+
+**冻结后必须同步的内容**：评测入口文件、终端命令、数据集名称、样本数、指标字段、运行配置和 Evidence 三帧中的全部数字。这里不提前绑定当前目录结构，也不预写可能变化的命令。
+
+> **Items that must be synchronized after the freeze**: evaluation entry file, terminal command, dataset name, sample count, metric fields, runtime configuration, and every number in the three Evidence frames. This placeholder deliberately does not bind to the current directory structure or pre-write a command that may change.
+
 ### Segment 6 · Evidence
 
 > On the latest 200-session public set, HitRate at ten is 0.9600, MRR is 0.606629, mean first-hit turn is 2.585, and the composite score is 0.830289.
@@ -392,6 +420,9 @@
 - [ ] 每个场景开始前新建会话并执行 `reset`。
 - [ ] 1080p、浏览器缩放 100%、按 `F` 进入 clean capture。
 - [ ] 正式录制不用自动播放，主视频只录 Segment 1 到 7。
+- [ ] `3:55` 在 Boundary 完整结束后切到开发编辑器，`4:05` 从真实评测输出切回 `S06-F01`。
+- [ ] 冻结项目结构后替换 Live evaluation 中的全部 `[待定]`，并确认终端输出与 Evidence 三帧逐项一致。
+- [ ] 只剪掉无信息的等待时间；保留执行动作和真实结果，并明确标注 `idle wait removed`。
 - [ ] 逐帧旁白按工作台底部的 voiceover 念，不即兴发挥。
 - [ ] 画面上"Why it matters"、指标 trace、底部配置不念，交给评委看。
 - [ ] 不展示 API key、`api.env`、私有路径、ground truth、完整目录和调试堆栈。
@@ -400,6 +431,9 @@
 > - [ ] Start each scenario with a new session and run `reset`.
 > - [ ] 1080p, browser zoom 100%, press `F` for clean capture.
 > - [ ] No autoplay in the formal recording; record Segments 1 to 7 only.
+> - [ ] At `3:55`, cut to the development editor only after Boundary is complete; at `4:05`, return from the genuine evaluator output to `S06-F01`.
+> - [ ] After the project structure is frozen, replace every `[TBD]` in Live evaluation and verify that the terminal output matches all three Evidence frames field by field.
+> - [ ] Remove only idle waiting; preserve the execution action and genuine result, and label the edit `idle wait removed`.
 > - [ ] Read the voiceover at the bottom of the workbench frame by frame; do not improvise.
 > - [ ] Do not read the on-screen "Why it matters" line, the metric trace or the bottom configuration; let judges read them.
 > - [ ] Never show API keys, `api.env`, private paths, ground truth, the full catalog or debug stacks.
