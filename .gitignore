@@ -5,6 +5,9 @@ __pycache__/
 results.json
 data/catalog.jsonl
 data/releases/
+data/catalog_sample_500.jsonl
+data/intent_eval_*.jsonl
+data/owntest*.jsonl
 # Organizer-only code, private evaluation data, manifests, and build reports.
 organizer/
 secure/
@@ -25,3 +28,24 @@ api.env
 .venv/
 .agents/skills
 .openspec
+
+# Local recording workspace and submission drafts are not part of the public code repository.
+video/
+tiktok-techjam-2026-*.md
+
+# Generated evaluation and local experiment outputs.
+runresult/
+/results/
+*.faiss
+*.faiss.manifest.json
+*.npz
+turns.jsonl
+
+# Editor and local tooling metadata.
+.vscode/
+.idea/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/

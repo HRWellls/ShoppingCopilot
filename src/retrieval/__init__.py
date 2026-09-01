@@ -1,4 +1,4 @@
-"""Stage 2 filtering and lexical retrieval."""
+"""Eligibility filtering, local retrieval, fusion, and route-aware ranking."""
 
 from src.retrieval.attributes import ExactAttributeIndex
 from src.retrieval.bm25 import BM25Index, query_terms

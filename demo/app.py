@@ -19,12 +19,10 @@ if not CATALOG.exists():
 DATASET = ROOT / "data/public_set.jsonl" if (ROOT / "data/public_set.jsonl").exists() else ROOT / "data/public_smoke.jsonl"
 agent = Agent(CATALOG)
 samples = load_jsonl(DATASET)
-sample_by_id = {str(s["sample_id"]): s for s in samples}
 SUCCESSFUL_SAMPLE_IDS = (
     "public_0004", "public_0005", "public_0007", "public_0010", "public_0011",
     "public_0013", "public_0014", "public_0021", "public_0023", "public_0025",
 )
-demo_samples = [sample_by_id[sample_id] for sample_id in SUCCESSFUL_SAMPLE_IDS if sample_id in sample_by_id]
 products = {p.parent_asin: p for p in agent._core.catalog}
 evaluator_products = {
     p.parent_asin: {"parent_asin": p.parent_asin, "title": p.title, "features": list(p.features),
@@ -32,10 +30,40 @@ evaluator_products = {
                     "details": dict(p.metadata), "store": p.brand or ""}
     for p in agent._core.catalog
 }
+
+# A public-set row can only drive the demo when its target exists in the active
+# catalog. The committed 100-product catalog is intentionally independent of the
+# evaluator set, so provide a deterministic local walkthrough when there is no
+# overlap. This keeps a fresh clone runnable without redistributing the 50k catalog.
+available_samples = [
+    sample for sample in samples
+    if str(sample["ground_truth"]["parent_asin"]) in evaluator_products
+]
+if not available_samples:
+    local_target = next(iter(evaluator_products))
+    available_samples = [{
+        "sample_id": "local_demo_0001",
+        "scenario_type": "buying",
+        "difficulty_bucket": "local-demo",
+        "ground_truth": {"parent_asin": local_target},
+        "user_profile": {
+            "summary": "Local browser demo profile.",
+            "preference_tags": ["fit", "comfort"],
+            "purchase_frequency": "demo",
+            "rating_style": "neutral",
+            "average_prior_rating": 4.0,
+        },
+    }]
+sample_by_id = {str(sample["sample_id"]): sample for sample in available_samples}
+demo_samples = [
+    sample_by_id[sample_id]
+    for sample_id in SUCCESSFUL_SAMPLE_IDS
+    if sample_id in sample_by_id
+] or available_samples[:10]
 sessions = {}
 
 def start(sample_id):
-    sample = sample_by_id.get(sample_id) or samples[0]
+    sample = sample_by_id.get(sample_id) or demo_samples[0]
     sid = "demo-" + uuid.uuid4().hex
     agent.reset(sid, sample["user_profile"])
     card, behavior = materialize_hidden_fields(sample, evaluator_products)

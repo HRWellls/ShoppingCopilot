@@ -7,7 +7,7 @@ from src.core import ShoppingAgentCore
 
 
 class Agent:
-    """Official reset/respond adapter for the deterministic stage 2 core."""
+    """Official reset/respond adapter for the Shopping Copilot core."""
 
     def __init__(
         self,

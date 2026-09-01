@@ -1,0 +1,61 @@
+{
+  "schema_version": 1,
+  "status": "frozen-public-development-result",
+  "profile": "d4",
+  "config_version": "retrieval-d4",
+  "reproduce": "python -m scripts.run_public_set_local --profile d4 --output .runtime/final-public.json",
+  "dataset": {
+    "path": "data/public_set.jsonl",
+    "sample_count": 200,
+    "sha256": "857259f7a438e6188ac63e18995b6ff4489bfcfc4a716a798b9a2aa0ee8f7579"
+  },
+  "catalog": {
+    "path": "data/catalog.jsonl",
+    "record_count": 50000,
+    "sha256": "da979b05a68af864cb0dcf9ee6a81c010c7e66a57978ad286c7a2e005fc69a67",
+    "committed": false
+  },
+  "configuration": {
+    "multiturn_state_enabled": true,
+    "intent_routing_enabled": true,
+    "intent_policy_enabled": true,
+    "intent_model_mode": "off",
+    "dense_enabled": false,
+    "llm_enabled": false,
+    "attribute_retrieval_enabled": true,
+    "attribute_reranking_enabled": true,
+    "recommendation_with_clarification_enabled": true,
+    "override_invalidation_enabled": true,
+    "optimized_single_pass_enabled": true,
+    "trace_enabled": false,
+    "max_turns": 10
+  },
+  "metrics": {
+    "hit_rate_at_10": 0.96,
+    "mrr": 0.606629,
+    "mttc": 2.585,
+    "efficiency": 0.8415,
+    "technical_score": 0.830289
+  },
+  "official_baseline": {
+    "name": "weak_bm25",
+    "hit_rate_at_10": 0.125,
+    "mrr": 0.068034,
+    "mttc": 9.81,
+    "efficiency": 0.119,
+    "technical_score": 0.10671
+  },
+  "scenario_metrics": {
+    "buying": {"sample_count": 80, "hit_rate_at_10": 0.9625, "mrr": 0.57754, "mttc": 2.1375},
+    "browsing": {"sample_count": 80, "hit_rate_at_10": 0.975, "mrr": 0.556741, "mttc": 2.2875},
+    "intent_override": {"sample_count": 30, "hit_rate_at_10": 1.0, "mrr": 0.876667, "mttc": 3.8},
+    "boundary": {"sample_count": 10, "hit_rate_at_10": 0.7, "mrr": 0.428333, "mttc": 4.9}
+  },
+  "benchmark": {
+    "initialization_seconds": 53.338836,
+    "response_p50_ms": 27.248,
+    "response_p95_ms": 48.044,
+    "fallback_count": 0,
+    "external_model_calls": 0
+  }
+}

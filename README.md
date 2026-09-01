@@ -1,78 +1,49 @@
-# TechJam Conversational E-Commerce Search Challenge
+# Shopping Copilot
 
-Build an AI shopping agent that asks useful follow-up questions and recommends the customer's hidden target product within at most 10 turns.
+Shopping Copilot is a headless conversational product-search Agent for the TikTok TechJam 2026 Shopping Copilot challenge. It turns a one-shot keyword query into a stateful shopping process: users can add constraints, change their mind, browse broadly, answer one useful clarification question, and receive catalog-valid recommendations within the ten-turn limit.
 
-## What You Receive
+On the organizer-released 200-session public development set, the frozen deterministic configuration achieved:
 
-- A frozen catalog of 50,000 products from the `Clothing_Shoes_and_Jewelry` category of Amazon Reviews 2023.
-- 200 labeled public sessions for local development.
-- A weak BM25 starter agent and deterministic local evaluator.
-- The Agent API contract and scoring rules.
+| Metric | Official weak BM25 baseline | Shopping Copilot | Improvement |
+|---|---:|---:|---:|
+| HitRate@10 | 0.1250 | **0.9600** | +83.50 pp |
+| MRR | 0.068034 | **0.606629** | +53.86 pp |
+| MTTC | 9.810 | **2.585** | 7.225 fewer turns |
+| Efficiency | 0.1190 | **0.8415** | +72.25 pp |
+| TechnicalScore | 0.106710 | **0.830289** | +72.36 pp |
 
-The organizer keeps 800 additional sessions private for final evaluation.
+The frozen run used local deterministic rules and retrieval: `dense=false`, `llm=false`, `intent model=off`, with zero external model calls and zero contract-compatible fallbacks in that run.
 
-## Task
+## Problem
 
-For each session, your agent receives an anonymized preference profile and a short customer message. Raw user IDs, review text, timestamps, and purchase history are never disclosed. On every turn the agent may:
+Static e-commerce search loses context when a shopper starts vague, adds a budget, changes a brand preference, switches between buying and browsing, or asks for an impossible combination. A useful shopping Agent must update only what changed, preserve every still-valid constraint, and avoid silently inventing or relaxing requirements.
 
-- ask a natural clarification question in `message` and identify one requested field in `ask_attribute`;
-- return a ranked list of up to 10 catalog `parent_asin` values;
-- do both in the same response.
+## Solution
 
-The session ends when the target product appears in the scored Top 10 or after turn 10. Sessions cover Buying, Browsing, Intent Override, and Boundary behavior.
+Shopping Copilot combines:
 
-## Download the Catalog
+- **Buying/Browsing routing**: Buying prioritizes hard eligibility and precision; Browsing keeps scene context and result diversity.
+- **Transactional multi-turn state**: every turn updates isolated session state atomically.
+- **Slot-level override handling**: clear or replace only the conflicting preference instead of restarting the conversation.
+- **Hard eligibility before ranking**: budget, explicit exclusions and catalog facts cannot be overridden by semantic similarity.
+- **Useful clarification**: ask at most one high-value question when the candidate space is too broad, with late-turn protection.
+- **Controlled relaxation**: when no result remains, relax only eligible preferences; never silently relax budget or explicit exclusions.
+- **Protocol-safe output**: return at most ten unique `parent_asin` values that exist in the read-only catalog.
 
-Download `catalog.jsonl.gz` from the GitHub Release attached to this repository, then run:
-
-```bash
-gzip -dk catalog.jsonl.gz
-mv catalog.jsonl data/catalog.jsonl
-```
-
-Verify the downloaded file using the published `SHA256SUMS` file.
-
-## Run the Starter
-
-Python 3.10 or later is recommended. The BM25 fallback uses only the standard library; persistent dense retrieval uses the dependencies in `requirements.txt`.
-
-Create the project environment and install the dense-retrieval dependencies:
-
-```bash
-/opt/anaconda3/bin/python3.12 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
-
-```bash
-python3 -m evaluator.local_evaluator
-```
-
-Edit `starter/agent.py` to implement your system. Do not edit the evaluator or public labels when reporting your local score.
-The command writes per-session results and aggregate metrics to `results.json`.
-
-The included weak BM25 starter scores Hit Rate@10 `0.125`, MRR `0.068034`, and
-MTTC `9.81` on the released public set. See `docs/baseline_results.json`.
-
-## Stage 2 MVP and Stage 3 Hybrid State
-
-The editable Agent now uses the deterministic Stage 2 framework described in `技术文档.md`:
+## Architecture
 
 ```text
-starter.Agent (official adapter)
-  -> SessionStateStore
-  -> rule or optional DeepSeek structured parsing
-  -> typed slots, override, negation, and TTL
-  -> read-only CatalogStore, hard filters, and safe relaxation
-  -> Buying/Browsing BM25 + optional dense retrieval
-  -> weighted RRF and a wide candidate pool
-  -> clarification policy and late-turn protection
-  -> Top 10 sanitization
-  -> optional JSONL trace
+message + user profile
+  → rule parsing and event detection
+  → transactional session-state reducer
+  → Buying / Browsing route plan
+  → hard eligibility filter
+  → local retrieval and route-aware reranking
+  → clarify / safely relax / recommend
+  → catalog-valid Top 10 response
 ```
 
-The default implementation remains single-process and offline. Dense and LLM routes are disabled by default, so the Agent always has a rule + BM25 path. The catalog is normalized and the FTS5 index is built once when `Agent` starts. Session state is keyed by the official `session_id`; `reset` replaces all prior state for that identifier. Explicit budget, brand, color, material, category, size, and exclusions are applied before final ranking. Missing prices do not satisfy an explicit budget.
-
-The official entry point remains unchanged:
+The official adapter remains small:
 
 ```python
 from starter.agent import Agent
@@ -82,233 +53,165 @@ agent.reset(session_id, user_profile)
 response = agent.respond(session_id, user_message, turn, top_k=10)
 ```
 
-Every response is sanitized to at most 10 unique catalog-valid `parent_asin` values. Invalid input, unknown sessions, index errors, and unexpected component failures return a contract-compatible deterministic fallback without exposing a stack trace. Controlled errors use codes such as `E_INPUT_TYPE`, `E_PROTOCOL`, `E_INDEX_NOT_READY`, `E_EMPTY_RESULT`, and `E_RETRIEVAL` in local traces.
+See [Architecture](docs/architecture.md) for component and safety details.
 
-### Tests
+## Repository Structure
 
-Run all unit, integration, evaluator, and catalog smoke tests:
-
-```bash
-python3 -m unittest discover -s tests -v
+```text
+starter/                    official reset/respond adapter
+src/                        state, NLU, retrieval, policy and output core
+evaluator/                  deterministic public-set evaluator
+scripts/                    supported setup, evaluation and validation commands
+tests/                      unit, integration, protocol and retrieval tests
+data/                       public sessions and small demo fixtures
+demo/                       optional local browser walkthrough
+docs/                       architecture, results, contract and attribution
 ```
 
-`tests/test_full_catalog_smoke.py` loads all 50,000 products when `data/catalog.jsonl` is present. It is skipped when the release catalog has not been downloaded.
+Local catalogs, model/index caches, API secrets, traces and generated results are intentionally excluded from Git.
 
-### Developer delivery and visual demo
+## Requirements
 
-Run the startup self-check and capture a redacted reproducible baseline:
+- Python 3.10 or newer; development and the frozen run used Python 3.12.
+- The organizer catalog is required only for the full 200-session reproduction.
+- The deterministic offline route uses no paid API.
+- `requirements.txt` contains optional dense-retrieval dependencies (`NumPy`, `FAISS`, `sentence-transformers`) and is needed for the complete optional-module test surface.
+
+## Setup and Installation
+
+```bash
+git clone https://github.com/HRWellls/Hamburgerr.git
+cd Hamburgerr
+
+python3 -m venv .venv
+source .venv/bin/activate          # Windows: .venv\Scripts\activate
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+```
+
+The repository includes `data/catalog_sample_100.jsonl`, so the self-check, browser demo and unit tests do not require the full catalog:
 
 ```bash
 python -m scripts.delivery_self_check --json
-python -m scripts.capture_baseline --output .runtime/baseline.json
 ```
 
-Launch the dependency-light conversation demo (sample catalog, offline BM25 fallback):
+## Data Preparation
+
+The full evaluation catalog is not committed. Obtain the participant-kit `catalog.jsonl.gz` from the organizer release, decompress it, and place it at:
+
+```text
+data/catalog.jsonl
+```
+
+Verify the prepared files:
+
+```bash
+shasum -a 256 data/catalog.jsonl data/public_set.jsonl
+```
+
+Expected SHA-256 values:
+
+```text
+da979b05a68af864cb0dcf9ee6a81c010c7e66a57978ad286c7a2e005fc69a67  data/catalog.jsonl
+857259f7a438e6188ac63e18995b6ff4489bfcfc4a716a798b9a2aa0ee8f7579  data/public_set.jsonl
+```
+
+Source and redistribution boundaries are documented in [Data and Asset Attribution](docs/data-attribution.md).
+
+## Run the Browser Demo
+
+The local browser walkthrough uses the retained 100-product sample by default:
 
 ```bash
 python -m demo.app
-# open http://127.0.0.1:8765
 ```
 
-See `开发者交付总结与操作指南.md` for the complete delivery checklist and rollback notes.
-
-### Evaluation and engineering metrics
-
-Run the unmodified official evaluator and keep its generated result local:
+Open  http://127.0.0.1:8765 . To use the full catalog:
 
 ```bash
-mkdir -p .runtime
-python3 -m evaluator.local_evaluator --output .runtime/phase2-public-results.json
+HAMBURGERR_DEMO_CATALOG=data/catalog.jsonl python -m demo.app
 ```
 
-Run the instrumentation wrapper for initialization time, per-turn latency, contract validation, and session-isolation checks. It calls the same public evaluator functions and does not alter labels or scoring:
+## Reproduce the Results
+
+Run the frozen D4 configuration on the full public set:
 
 ```bash
-python3 -m scripts.phase2_benchmark --output .runtime/phase2-validation.json
+python -m scripts.run_public_set_local \
+  --profile d4 \
+  --output .runtime/final-public.json
 ```
 
-The Stage 2 validation run on the included 200 sessions completed with 0 contract failures and 0 session-leakage failures. Local metrics were Hit Rate@10 `0.14`, MRR `0.076442`, and MTTC `9.665`; the official weak-baseline record in `docs/baseline_results.json` is intentionally unchanged.
+This command uses `data/public_set.jsonl` and `data/catalog.jsonl`. It prints the aggregate and per-scenario metrics and writes detailed output under the ignored `.runtime/` directory.
 
-Run the Stage 3 default state/clarification configuration with the same wrapper:
+For a quick execution smoke test:
 
 ```bash
-python3 -m scripts.phase2_benchmark --output .runtime/phase3-bm25-state-validation.json
+python -m scripts.run_public_set_local \
+  --profile d4 \
+  --catalog data/catalog_sample_100.jsonl \
+  --dataset data/sample_smoke.jsonl \
+  --output .runtime/smoke.json
 ```
 
-The Stage 3 run completed with Hit Rate@10 `0.31`, MRR `0.212282`, MTTC `8.685`, 0 contract failures, and 0 session-leakage failures. See `docs/phase3_results.md` for scenario metrics and experiment boundaries.
+The sample-catalog smoke checks execution only; it does not reproduce the published quality score. See [Evaluation and Results](docs/results.md) and [machine-readable frozen evidence](docs/results/final-public.json).
 
-Run the Stage 3 ablations when comparing dialogue contributions:
+## Run the Tests
 
 ```bash
-python3 -m scripts.phase3_benchmark --variant full --output .runtime/phase3-full.json
-python3 -m scripts.phase3_benchmark --variant no-clarification --output .runtime/phase3-no-clarification.json
-python3 -m scripts.phase3_benchmark --variant no-relaxation --output .runtime/phase3-no-relaxation.json
+python -m unittest discover -s tests -v
 ```
 
-On the released public set, `no-clarification` returned to the Stage 2 score (`0.119633`), `no-relaxation` scored `0.255585`, and the full variant scored `0.264985`. These runs use dense and LLM disabled, so they are deterministic and do not require an API key.
+`tests/test_full_catalog_smoke.py` automatically skips when `data/catalog.jsonl` is unavailable. The remaining suite covers the Agent contract, session isolation, state updates, overrides, negation, filters, retrieval, clarification, dense fallback and evaluator behavior.
 
-`no-clarification` disables follow-up questions: the Agent returns its current Top 10 without asking for a missing category, budget, size, color, brand, or material. `no-relaxation` keeps clarification but disables safe empty-result recovery: if all hard filters produce no candidates, the Agent does not retry after removing brand, color/material, or expanding a category synonym. Budget and explicit exclusions are never silently relaxed in either mode.
-
-### Multi-turn intent routing
-
-The optional multi-turn path adds transactional event reduction, Buying/Browsing-specific retrieval, and route-aware clarification. The local NLI classifier supports `off`, observational `shadow`, and gated `active` modes; its release default is `off` because the active end-to-end ablation did not beat the B3 rule-only gate. Model-off needs no optional NLI dependencies or artifact, and runtime code never downloads model files.
-
-See `docs/intent_routing.md` for feature flags, offline artifact preparation and verification, benchmark commands, frozen report locations, failure fallback, and rollback steps.
-
-### Persistent dense retrieval
-
-Dense retrieval requires NumPy plus a locally available sentence-transformers model. The Agent never downloads a model during startup. Configure a local path explicitly:
-
-On macOS, the FAISS and PyTorch wheels may ship separate OpenMP runtimes; the dense module sets `KMP_DUPLICATE_LIB_OK=TRUE` before loading them to avoid a process abort. Dense inference remains single-process.
-
-```python
-config = AgentConfig(
-    catalog_path=Path("data/catalog.jsonl"),
-    dense_enabled=True,
-    dense_model_id="your-local-model-id",
-    dense_model_path=Path("/path/to/cached/model"),
-    dense_index_path=Path(".runtime/indexes/catalog-all-MiniLM-L6-v2.faiss"),
-)
-```
-
-The generated FAISS file contains normalized product vectors plus a JSON manifest keyed by catalog checksum, model/version, dimension, normalization, backend, and config version. It remains under `.runtime/` and must not be committed. When the default catalog and matching files exist, `Agent("data/catalog.jsonl")` loads this index directly; it does not re-embed products. If the index/model is unavailable or its manifest mismatches, the Agent records a controlled fallback and continues with BM25.
-
-Normal Agent startup has `dense_build_allowed=False`: it will never rebuild or overwrite FAISS. Only the explicit build command enables writes.
-
-Build the persistent index once with:
+While the final team and public URLs are still pending, run:
 
 ```bash
-.venv/bin/python -m scripts.build_dense_index
+python -m scripts.check_public_submission --allow-placeholders
 ```
 
-The command embeds exactly the 50,000 records from `data/catalog.jsonl`. Use `--force` only after changing the catalog or embedding model.
+Run the same command without `--allow-placeholders` for the final publication gate.
 
-For routine testing, use the fixed 8-session stratified set instead of all 200 sessions:
+## Tools, APIs, Libraries and Data
 
-```bash
-.venv/bin/python -m scripts.phase3_benchmark \
-  --dataset data/public_smoke.jsonl \
-  --dense \
-  --output .runtime/phase3-dense-smoke.json
-```
+- **Development tools**: Python 3.12, VS Code, Git/GitHub, terminal tooling and browser developer tools.
+- **Core runtime**: Python standard library and in-memory/local indexes.
+- **Optional libraries**: NumPy 2.5.2, FAISS CPU 1.12.0 and sentence-transformers 5.7.0 for the opt-in dense path.
+- **Optional API**: a schema-bounded DeepSeek/OpenAI-compatible chat-completions parser is supported. It is disabled by default and was not called in the frozen run.
+- **Dataset**: organizer competition package derived from Amazon Reviews 2023, `Clothing_Shoes_and_Jewelry`; 50,000 read-only products and 200 public development sessions.
+- **Assets**: original text/UI demo assets; no third-party product images or logos are required.
 
-`data/public_smoke.jsonl` contains 2 sessions from each of Buying, Browsing, Intent Override, and Boundary. Regenerate it deterministically with `python -m scripts.make_smoke_dataset`.
+### Model and API Cost
 
-### Optional DeepSeek parser
+The reported D4 evaluation used no dense model, intent model or external LLM call. External API cost for that run was USD 0. Local CPU time and memory are still real runtime costs. API keys must be supplied through environment variables or a local ignored `api.env`; they are never committed or included in traces.
 
-`deepseek-v4-flash` is configured as a schema-bounded parser, not as an ASIN selector or tool-running agent. Keep the API key in the environment or in local `api.env` with mode 0600:
+## Limitations
 
-```bash
-export DEEPSEEK_API_KEY="..."
-# or: chmod 600 api.env
-```
+- The catalog is static and read-only; there is no live inventory, price or availability feed.
+- Evaluation targets exact `parent_asin` matches, which is narrower than real user satisfaction.
+- The system is text-only and single-process; it does not provide multimodal search or production concurrency guarantees.
+- Rules remain weaker on spelling noise, implicit long-tail preferences and complex comparative language.
+- Local latency measurements are not production SLAs.
+- Business impact such as conversion or abandonment reduction still requires online experimentation.
 
-Enable it explicitly:
+## Future Improvements
 
-```python
-config = AgentConfig(
-    catalog_path=Path("data/catalog.jsonl"),
-    llm_enabled=True,
-    llm_model="deepseek-v4-flash",
-    llm_endpoint="https://api.deepseek.com/chat/completions",
-    llm_timeout_ms=600,
-)
-agent = Agent(config=config)
-```
+- Connect a live catalog with inventory and price freshness.
+- Add guarded semantic understanding only when it passes end-to-end quality, latency and cost gates.
+- Calibrate clarification using real interaction feedback and candidate uncertainty.
+- Add typo tolerance, multilingual queries and richer comparative reasoning.
+- Validate conversion, satisfaction and hand-off hypotheses through controlled online experiments.
 
-Environment variables take precedence over `api.env`. Missing keys, unsafe file permissions, HTTP/auth failures, timeouts, malformed JSON, unknown fields, and missing usage all fall back to deterministic rules. Secrets and raw model responses are excluded from trace and config snapshots.
 
-### Optional trace
+## Public Links
 
-Tracing is disabled by default. Enable it explicitly when constructing the Agent:
+- Devpost: `TODO_SUBMISSION_DEVPOST_URL`
+- Demo video: `TODO_SUBMISSION_VIDEO_URL`
+- GitHub repository: `https://github.com/HRWellls/Hamburgerr.git`
 
-```python
-from pathlib import Path
+## Security and Submission Notes
 
-from src.config import AgentConfig
-from starter.agent import Agent
-
-config = AgentConfig(
-    catalog_path=Path("data/catalog.jsonl"),
-    trace_enabled=True,
-    trace_path=Path(".runtime/turns.jsonl"),
-)
-agent = Agent(config=config)
-```
-
-Each JSONL event contains routing, constraint names, filter counts, candidate count, returned Top 10, latency, fallback status, error code, and config version. It excludes raw messages, full profiles, credentials, ground truth, and private evaluator state. Trace I/O failure degrades logging only and never retries or changes retrieval.
-
-### Later phases
-
-Stage 3 provides dense/RRF boundaries, structured state, override/negation, safe relaxation, and basic clarification. Cross-Encoder/LLM reranking, Verifier, entropy/margin policy, and information-gain calibration remain Stage 4 work.
-
-## Agent Interface
-
-```python
-class Agent:
-    def reset(self, session_id: str, user_profile: dict) -> None:
-        ...
-
-    def respond(self, session_id: str, user_message: str, turn: int, top_k: int) -> dict:
-        return {
-            "message": "Do you have a material preference?",
-            "ask_attribute": "material",
-            "recommendations": [
-                {"parent_asin": "B000..."},
-                {"parent_asin": "B001..."}
-            ],
-            "usage": {"prompt_tokens": 120, "completion_tokens": 30}
-        }
-```
-
-`ask_attribute` is one of `category`, `material`, `color`, `size`, `style`, `brand`, `budget`, `feature`, `use_case`, `other`, or `null`. See `docs/agent_api_contract.json`.
-
-## Technical Metrics
-
-- **Hit Rate@10:** fraction of sessions that find the target within 10 turns.
-- **MRR:** mean reciprocal rank of the target; a miss contributes zero.
-- **MTTC:** mean first-hit turn; a miss is assigned turn 11.
-- **Reported token usage:** prompt and completion tokens returned by the team's model client.
-
-```text
-TechnicalScore = 0.50 × HitRate@10 + 0.30 × MRR + 0.20 × Efficiency
-Efficiency = clip((11 - MTTC) / 10, 0, 1)
-```
-
-Only exact `parent_asin` equality produces a hit. Core metrics are also reported by scenario.
-
-## Model Choice and Cost
-
-Teams may use any legally accessible LLM API or local model. Teams manage their own credentials and must never commit API keys. Model choice, estimated cost, token usage, and latency must be disclosed. Token usage is a feasibility metric, not part of the core technical score. The organizer does not provide or reimburse model API credits; teams are responsible for any costs incurred through optional external services.
-
-## Files
-
-```text
-data/public_set.jsonl             200 labeled development sessions
-data/public_smoke.jsonl           8-session stratified smoke set
-docs/competition_specification.md participant rules and evaluation protocol
-docs/agent_api_contract.json      machine-readable Agent contract
-docs/evaluation_config.json       scoring configuration
-docs/baseline_results.json        reproducible weak-starter reference score
-starter/agent.py                  editable weak starter
-evaluator/local_evaluator.py      public-set simulator and scorer
-src/                              Stage 2/3 typed Agent core
-scripts/phase2_benchmark.py       local engineering-metric wrapper
-scripts/phase3_benchmark.py       Stage 3 ablation wrapper
-scripts/build_dense_index.py      one-time 50k product FAISS builder
-scripts/make_smoke_dataset.py     stratified smoke-set generator
-docs/phase3_results.md            Phase 3 experiment record
-```
-
-## Judging and Submission Policy
-
-- Participant submission requirements: `docs/submission_rules.md`
-- Participant release checklist: `docs/participant_release_checklist.md`
-- Organizer-only final judging controls: `organizer/JUDGING_RUNBOOK.md`
-- Organizer private release checklist: `organizer/private_release_checklist.md`
-- Judging day operations SOP: `organizer/JUDGING_DAY_SOP.md`
-
-## Data Source
-
-The catalog and sessions are derived from Amazon Reviews 2023 by McAuley Lab, UCSD. See `DATA_ATTRIBUTION.md` before using or redistributing the data.
-Sessions are sampled deterministically from the official Clothing 5-core leave-last-out split and joined to the frozen catalog.
+- Never commit `api.env`, `.env`, API keys, the full catalog, private evaluation data, model weights, FAISS indexes, runtime traces or generated evaluator output.
+- The catalog is treated as read-only.
+- Reported metrics come from the unmodified local evaluator and the canonical evidence under `docs/results/`.
+- See [Agent API contract](docs/agent_api_contract.json), [evaluation configuration](docs/evaluation_config.json), [submission rules](docs/submission_rules.md), and [data attribution](docs/data-attribution.md).
