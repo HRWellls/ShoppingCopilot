@@ -1,9 +1,5 @@
 # Devpost Written Project Description
 
-The English section below is copy-ready after replacing the four `TODO_SUBMISSION_*` placeholders. The Chinese section is a working translation for team review.
-
----
-
 ## English — Copy-ready Devpost Text
 
 ### Shopping Copilot
@@ -54,15 +50,12 @@ The hardest part was not retrieving more products; it was deciding which parts o
 
 The current catalog is static, the experience is text-only and single-process, and exact-item evaluation is narrower than real satisfaction. Rule-based understanding remains weaker on spelling noise, implicit long-tail preferences and complex comparisons. Next we would connect live inventory and pricing, add semantic assistance only behind quality/cost gates, improve multilingual and typo-tolerant understanding, and validate conversion and satisfaction through online experiments.
 
-### Team contributions
-
-`TODO_SUBMISSION_TEAM`
 
 ### Links
 
-- GitHub: `TODO_SUBMISSION_REPOSITORY_URL`
-- Public demo video: `TODO_SUBMISSION_VIDEO_URL`
-- Devpost: `TODO_SUBMISSION_DEVPOST_URL`
+- GitHub: `https://github.com/HRWellls/ShoppingCopilot.git`
+- Public demo video: `https://youtu.be/Ws1UAEZ1bV8`
+- Devpost: `https://devpost.com/software/shoppingcopilot?ref_content=my-projects-tab&ref_feature=my_projects`
 
 ---
 
@@ -102,7 +95,7 @@ Shopping Copilot 是一个无界面的对话式商品搜索 Agent。它把一次
 
 ### 团队贡献与链接
 
-- 团队：`TODO_SUBMISSION_TEAM`
-- GitHub：`TODO_SUBMISSION_REPOSITORY_URL`
-- 视频：`TODO_SUBMISSION_VIDEO_URL`
-- Devpost：`TODO_SUBMISSION_DEVPOST_URL`
+- 团队：`BurgerKing`
+- GitHub：`https://github.com/HRWellls/ShoppingCopilot.git`
+- 视频：`https://youtu.be/Ws1UAEZ1bV8`
+- Devpost：`https://devpost.com/software/shoppingcopilot?ref_content=my-projects-tab&ref_feature=my_projects`
